@@ -67,6 +67,10 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Personal cashflow manager — FastAPI backend + React frontend
+            org.opencontainers.image.licenses=MIT
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cashflow-manager:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cashflow-manager:buildcache,mode=min,image-manifest=true,oci-mediatypes=true
 

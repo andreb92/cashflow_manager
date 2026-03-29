@@ -8,9 +8,6 @@ RUN npm run build
 
 # ── Stage 2: Production image ──────────────────────────────────────────────
 FROM python:3.14-alpine
-LABEL org.opencontainers.image.source="https://github.com/abalsamo92/cashflow-manager"
-LABEL org.opencontainers.image.description="Personal cashflow manager — FastAPI backend + React frontend"
-LABEL org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 
 # System packages
