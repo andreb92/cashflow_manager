@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
-      contents: write       # needed by semantic-release to create tags/releases
-      packages: write       # needed to push to GHCR
-      issues: write         # needed by @semantic-release/github to comment on issues
-      pull-requests: write  # needed by @semantic-release/github to comment on PRs
+      contents: write # needed by semantic-release to create tags/releases
+      packages: write # needed to push to GHCR
+      issues: write # needed by @semantic-release/github to comment on issues
+      pull-requests: write # needed by @semantic-release/github to comment on PRs
 
     steps:
       - name: Checkout (full history for semantic-release)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Get short SHA
         id: sha
