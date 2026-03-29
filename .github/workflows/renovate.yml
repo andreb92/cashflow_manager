@@ -3,7 +3,7 @@ name: Renovate
 on:
   schedule:
     # Every Saturday at 03:00 UTC — matches "every weekend" in renovate.json
-    - cron: '0 3 * * 6'
+    - cron: "0 3 * * 6"
   workflow_dispatch: # Allow manual trigger from the Actions tab
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     name: Renovate dependency updates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: renovatebot/github-action@v41
         with:
