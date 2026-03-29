@@ -16,6 +16,7 @@ jobs:
       packages: write # needed to push to GHCR
       issues: write # needed by @semantic-release/github to comment on issues
       pull-requests: write # needed by @semantic-release/github to comment on PRs
+      id-token: write # needed by docker/build-push-action@v7 for GitHub artifact attestation
 
     steps:
       - name: Checkout (full history for semantic-release)
