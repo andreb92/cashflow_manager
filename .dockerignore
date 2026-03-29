@@ -1,0 +1,25 @@
+# Python
+backend/__pycache__/
+backend/**/__pycache__/
+**/*.pyc
+backend/.pytest_cache/
+backend/htmlcov/
+backend/coverage.xml
+
+# Node
+frontend/node_modules/
+frontend/dist/
+e2e/node_modules/
+
+# Git / IDE
+.git/
+**/.DS_Store
+
+# Secrets
+.env
+**/.env
+
+# Dev-only
+backend/Dockerfile
+frontend/Dockerfile
+docs/

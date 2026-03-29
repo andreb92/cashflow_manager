@@ -1,0 +1,80 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { transfersApi } from '../../api/transfers';
+import TransferForm from './TransferForm';
+import CascadeDeleteModal from './CascadeDeleteModal';
+import Modal from '../ui/Modal';
+import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
+import type { Transfer } from '../../types/api';
+
+const fmt = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 2 });
+
+export default function TransferList() {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editTr, setEditTr] = useState<Transfer | null>(null);
+  const [deleteTr, setDeleteTr] = useState<Transfer | null>(null);
+
+  const { data: transfers = [], isLoading } = useQuery({
+    queryKey: ['transfers'],
+    queryFn: () => transfersApi.list(),
+  });
+
+  const { mutate: deleteOne, isPending: deleteLoading } = useMutation({
+    mutationFn: ({ id, cascade }: { id: string; cascade: string }) =>
+      transfersApi.delete(id, cascade),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transfers'] });
+      qc.invalidateQueries({ queryKey: ['summary'] });
+      qc.invalidateQueries({ queryKey: ['assets'] });
+      setDeleteTr(null);
+    },
+  });
+
+  if (isLoading) return <div className="animate-pulse h-32 bg-muted-bg rounded" />;
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="font-semibold text-secondary">Transfers</h2>
+        <Button onClick={() => setAddOpen(true)}>+ Add transfer</Button>
+      </div>
+      <ul className="bg-surface rounded-lg border border-line divide-y divide-line text-sm">
+        {transfers.length === 0 && <li className="p-4 text-faint">No transfers</li>}
+        {transfers.map((tr) => (
+          <li key={tr.id} className="p-3 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-primary">{tr.detail}</span>
+                {tr.recurrence_months && <span title="Recurring" className="text-blue-400 text-xs">↻</span>}
+              </div>
+              <div className="text-muted text-xs mt-0.5">
+                {tr.date} · <span>{tr.from_account_name}</span> → <span>{tr.to_account_name}</span>
+              </div>
+            </div>
+            <Badge color="blue">€{fmt(tr.amount)}</Badge>
+            <div className="flex gap-1">
+              <Button variant="ghost" className="text-xs px-2" onClick={() => setEditTr(tr)}>Edit</Button>
+              <Button variant="ghost" className="text-xs px-2 text-red-500" onClick={() => setDeleteTr(tr)}>Delete</Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add transfer">
+        <TransferForm onSuccess={() => setAddOpen(false)} />
+      </Modal>
+      <Modal open={!!editTr} onClose={() => setEditTr(null)} title="Edit transfer">
+        {editTr && <TransferForm initial={editTr} onSuccess={() => setEditTr(null)} />}
+      </Modal>
+      <CascadeDeleteModal
+        open={!!deleteTr}
+        onClose={() => setDeleteTr(null)}
+        isRecurring={!!deleteTr?.recurrence_months}
+        isPending={deleteLoading}
+        onConfirm={(cascade) => deleteTr && deleteOne({ id: deleteTr.id, cascade })}
+      />
+    </>
+  );
+}

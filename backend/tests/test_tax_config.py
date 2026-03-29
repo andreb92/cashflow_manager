@@ -1,0 +1,86 @@
+import pytest
+
+
+def test_user_cannot_modify_system_seeded_tax_config(client):
+    """System-seeded tax configs (user_id=NULL) must not be modifiable via the API."""
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    configs = client.get("/api/v1/tax-config").json()
+    system_config = next((c for c in configs if not c.get("user_id")), None)
+    if system_config is None:
+        pytest.skip("No system-seeded tax configs found")
+    resp = client.put(f"/api/v1/tax-config/{system_config['id']}", json={
+        "valid_from": system_config["valid_from"],
+        "inps_rate": 0.01,
+    })
+    assert resp.status_code == 403
+
+
+def test_user_can_create_own_tax_config(client):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    created = client.post("/api/v1/tax-config", json={
+        "valid_from": "2030-01-01",
+        "inps_rate": 0.09,
+    })
+    assert created.status_code == 200
+    assert created.json().get("user_id") is not None
+
+
+def test_list_tax_config_returns_seeded_row(client):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    r = client.get("/api/v1/tax-config")
+    assert r.status_code == 200
+    assert len(r.json()) >= 1
+    assert r.json()[0]["valid_from"] == "2026-01-01"
+
+def test_create_new_tax_config_period(client):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    r = client.post("/api/v1/tax-config", json={"valid_from": "2027-01-01", "irpef_band2_rate": 0.35})
+    assert r.status_code == 200
+    assert r.json()["valid_from"] == "2027-01-01"
+
+def test_update_tax_config(client):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    config_id = client.post("/api/v1/tax-config", json={"valid_from": "2027-01-01"}).json()["id"]
+    r = client.put(f"/api/v1/tax-config/{config_id}", json={
+        "valid_from": "2027-01-01", "irpef_band1_rate": 0.22
+    })
+    assert r.status_code == 200
+    assert float(r.json()["irpef_band1_rate"]) == pytest.approx(0.22)
+
+def test_delete_non_earliest_tax_config(client):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    config_id = client.post("/api/v1/tax-config", json={"valid_from": "2027-01-01"}).json()["id"]
+    r = client.delete(f"/api/v1/tax-config/{config_id}")
+    assert r.status_code == 200
+
+def test_delete_system_seeded_tax_config_returns_403(client):
+    """Deleting a system-seeded row (user_id=NULL) must be forbidden."""
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    earliest_id = client.get("/api/v1/tax-config").json()[0]["id"]
+    r = client.delete(f"/api/v1/tax-config/{earliest_id}")
+    assert r.status_code == 403
+
+
+def test_delete_earliest_user_owned_tax_config_returns_400(client):
+    """Deleting the earliest user-owned row (when it is the global earliest) returns 400."""
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    # Create a user-owned config with a date *before* the seeded 2026-01-01 row
+    config_id = client.post("/api/v1/tax-config", json={"valid_from": "2020-01-01"}).json()["id"]
+    r = client.delete(f"/api/v1/tax-config/{config_id}")
+    assert r.status_code == 400

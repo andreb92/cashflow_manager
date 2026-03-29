@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary:     rgb(17 24 39);
+  --color-secondary:   rgb(75 85 99);
+  --color-muted:       rgb(107 114 128);
+  --color-faint:       rgb(156 163 175);
+  --color-canvas:      rgb(249 250 251);
+  --color-surface:     rgb(255 255 255);
+  --color-elevated:    rgb(255 255 255);
+  --color-subtle:      rgb(249 250 251);
+  --color-muted-bg:    rgb(243 244 246);
+  --color-line:        rgb(229 231 235);
+  --color-line-strong: rgb(209 213 219);
+}
+
+@layer base {
+  .dark {
+    --color-primary:     rgb(243 244 246);
+    --color-secondary:   rgb(156 163 175);
+    --color-muted:       rgb(156 163 175);
+    --color-faint:       rgb(107 114 128);
+    --color-canvas:      rgb(3 7 18);
+    --color-surface:     rgb(17 24 39);
+    --color-elevated:    rgb(31 41 55);
+    --color-subtle:      rgb(31 41 55);
+    --color-muted-bg:    rgb(31 41 55);
+    --color-line:        rgb(55 65 81);
+    --color-line-strong: rgb(75 85 99);
+  }
+}

@@ -1,0 +1,10 @@
+services:
+  app:
+    image: ghcr.io/your-username/cashflow-manager:1.6.0
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    ports:
+      - "80:8080"
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    restart: unless-stopped

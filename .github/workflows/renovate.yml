@@ -1,0 +1,23 @@
+name: Renovate
+
+on:
+  schedule:
+    # Every Saturday at 03:00 UTC — matches "every weekend" in renovate.json
+    - cron: '0 3 * * 6'
+  workflow_dispatch: # Allow manual trigger from the Actions tab
+
+jobs:
+  renovate:
+    name: Renovate dependency updates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: renovatebot/github-action@v41
+        with:
+          configurationFile: .github/renovate.json
+        env:
+          # RENOVATE_TOKEN must be a GitHub PAT (classic) with repo scope.
+          # Create one at: Settings → Developer settings → Personal access tokens
+          # Then add it as a repository secret named RENOVATE_TOKEN.
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}

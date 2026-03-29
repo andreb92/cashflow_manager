@@ -1,0 +1,20 @@
+name: Cleanup untagged packages
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'  # Every Sunday at 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete untagged GHCR images
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: cashflow_manager
+          package-type: container
+          delete-only-untagged-versions: true
+          min-versions-to-keep: 0

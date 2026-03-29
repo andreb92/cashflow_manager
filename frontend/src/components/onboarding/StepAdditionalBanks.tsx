@@ -1,0 +1,50 @@
+import { useState } from 'react';
+import { useOnboarding } from '../../contexts/OnboardingContext';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+
+interface Account { name: string; opening_balance: number; }
+
+export default function StepAdditionalBanks() {
+  const { updateData, setStep } = useOnboarding();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [name, setName] = useState('');
+  const [balance, setBalance] = useState('');
+
+  const add = () => {
+    if (!name) return;
+    setAccounts((prev) => [...prev, { name, opening_balance: parseFloat(balance) || 0 }]);
+    setName('');
+    setBalance('');
+  };
+
+  const next = () => {
+    updateData({ additional_banks: accounts });
+    setStep(4);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold">Additional bank accounts (optional)</h2>
+      <div className="flex gap-2">
+        <Input label="Account name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input label="Balance (€)" type="number" step="0.01" value={balance} onChange={(e) => setBalance(e.target.value)} />
+        <Button variant="secondary" type="button" onClick={add} className="self-end">Add</Button>
+      </div>
+      {accounts.length > 0 && (
+        <ul className="text-sm space-y-1">
+          {accounts.map((a, i) => (
+            <li key={i} className="flex justify-between border rounded px-3 py-1">
+              <span>{a.name}</span>
+              <span>€{a.opening_balance.toFixed(2)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Button variant="secondary" type="button" onClick={() => setStep(2)}>Back</Button>
+        <Button type="button" onClick={next}>Next</Button>
+      </div>
+    </div>
+  );
+}
