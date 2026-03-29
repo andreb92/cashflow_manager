@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/your-username/cashflow-manager:1.6.0
+    image: ghcr.io/andreb92/cashflow-manager:latest
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     ports:
       - "80:8080"
