@@ -33,7 +33,7 @@ def test_delete_own_account(client, db):
     client.post("/api/v1/auth/register", json={
         "email": "alice@example.com", "password": "Password1!", "name": "Alice"
     })
-    r = client.delete("/api/v1/users/me")
+    r = client.request("DELETE", "/api/v1/users/me", json={"password": "Password1!"})
     assert r.status_code == 200
     # Should now be unauthenticated
     assert client.get("/api/v1/users/me").status_code == 401

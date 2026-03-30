@@ -26,16 +26,13 @@ def client():
         finally:
             db.close()
 
-    # Use development_mode=True so cookies don't get the Secure flag over plain
-    # HTTP in the test client.
+    # Set DEVELOPMENT_MODE before TestClient.__enter__ so the lifespan
+    # sees it when warn_insecure_defaults() is called at startup.
+    import os
+    os.environ["DEVELOPMENT_MODE"] = "true"
     get_settings.cache_clear()
     app.dependency_overrides[get_db] = override
     with TestClient(app, raise_server_exceptions=True) as c:
-        # Patch settings so the router sees development_mode=True (no Secure flag)
-        get_settings.cache_clear()
-        import os
-        os.environ["DEVELOPMENT_MODE"] = "true"
-        get_settings.cache_clear()
         yield c
     app.dependency_overrides.clear()
     os.environ.pop("DEVELOPMENT_MODE", None)
@@ -94,16 +91,13 @@ def test_me_rejects_token_without_sub(client):
     assert r.status_code == 401
 
 
-def test_insecure_defaults_log_warning(caplog):
-    """warn_insecure_defaults() emits warnings when production mode uses insecure defaults."""
-    import logging
+def test_insecure_defaults_raises_error():
+    """warn_insecure_defaults() raises ValueError when production mode uses insecure defaults."""
+    import pytest
     from app.config import Settings
     s = Settings(development_mode=False, secret_key="dev-secret-key", session_encryption_key="0" * 64)
-    with caplog.at_level(logging.WARNING, logger="cashflow.config"):
+    with pytest.raises(ValueError, match="SECRET_KEY"):
         s.warn_insecure_defaults()
-    messages = [r.message for r in caplog.records]
-    assert any("SECRET_KEY" in m for m in messages)
-    assert any("SESSION_ENCRYPTION_KEY" in m for m in messages)
 
 
 def test_secure_config_no_warning(caplog):
@@ -119,7 +113,7 @@ def test_secure_config_no_warning(caplog):
 def test_delete_me_clears_access_token_cookie(client):
     """Account deletion must clear the access_token cookie, not a stale cashflow_jwt name."""
     client.post("/api/v1/auth/register", json={"email": "del_cookie@test.com", "password": "pw", "name": "D"})
-    resp = client.delete("/api/v1/users/me")
+    resp = client.request("DELETE", "/api/v1/users/me", json={"password": "pw"})
     assert resp.status_code == 200
     set_cookie = resp.headers.get("set-cookie", "")
     assert "access_token" in set_cookie

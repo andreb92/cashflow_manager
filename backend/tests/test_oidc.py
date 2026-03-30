@@ -12,6 +12,7 @@ from app.config import get_settings
 
 @pytest.fixture()
 def oidc_client(monkeypatch):
+    monkeypatch.setenv("DEVELOPMENT_MODE", "true")
     monkeypatch.setenv("OIDC_ENABLED", "true")
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://example.com/")
     monkeypatch.setenv("OIDC_CLIENT_ID", "client-id")

@@ -61,7 +61,9 @@ def test_delete_non_earliest_tax_config(client):
     client.post("/api/v1/auth/register", json={
         "email": "alice@example.com", "password": "Password1!", "name": "Alice"
     })
-    config_id = client.post("/api/v1/tax-config", json={"valid_from": "2027-01-01"}).json()["id"]
+    # Create two user-owned configs; only the later one can be deleted
+    client.post("/api/v1/tax-config", json={"valid_from": "2027-01-01"})
+    config_id = client.post("/api/v1/tax-config", json={"valid_from": "2028-01-01"}).json()["id"]
     r = client.delete(f"/api/v1/tax-config/{config_id}")
     assert r.status_code == 200
 
