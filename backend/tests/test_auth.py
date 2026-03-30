@@ -34,7 +34,7 @@ def client():
         # Patch settings so the router sees development_mode=True (no Secure flag)
         get_settings.cache_clear()
         import os
-        os.environ.setdefault("DEVELOPMENT_MODE", "true")
+        os.environ["DEVELOPMENT_MODE"] = "true"
         get_settings.cache_clear()
         yield c
     app.dependency_overrides.clear()

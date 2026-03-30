@@ -2,8 +2,8 @@ fastapi==0.135.2
 uvicorn[standard]==0.42.0
 sqlalchemy>=2.0.37
 alembic==1.18.4
-python-jose[cryptography]==3.5.0
-passlib[bcrypt]==1.7.4
+PyJWT>=2.9.0
+bcrypt>=4.0.0
 httpx==0.28.1
 python-multipart==0.0.22
 pydantic-settings==2.13.1

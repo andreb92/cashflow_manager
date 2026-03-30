@@ -1,12 +1,19 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.user import User
+from app.services.auth import verify_password
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 COOKIE_NAME = "access_token"
 OIDC_ID_TOKEN_COOKIE = "oidc_id_token"
+
+
+class DeleteMeRequest(BaseModel):
+    password: str
+
 
 # /me MUST be registered before /{id} to avoid route shadowing
 @router.get("/me")
@@ -19,7 +26,9 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.delete("/me")
-def delete_me(response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_me(body: DeleteMeRequest, response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user.hashed_password or not verify_password(body.password, current_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid password")
     db.delete(current_user)
     db.commit()
     response.delete_cookie(COOKIE_NAME)

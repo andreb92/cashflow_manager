@@ -119,6 +119,101 @@ def compute_bank_balance(user_id: str, year: int, month: int, db: Session) -> fl
     return balance
 
 
+def compute_bank_balances_for_year(user_id: str, year: int, db: Session) -> dict[int, float]:
+    """
+    Compute the bank balance at end of each month for a full year in a single pass.
+    Does the same 4 bulk loads as compute_bank_balance but only once, then accumulates
+    from tracking_start through December, capturing the balance at each month boundary.
+    Returns {1: balance, 2: balance, ..., 12: balance}.
+    """
+    from app.models.user import UserSetting
+    start_setting = db.query(UserSetting).filter_by(user_id=user_id, key="tracking_start_date").first()
+    if not start_setting:
+        return {m: 0.0 for m in range(1, 13)}
+    start_parts = start_setting.value.split("-")
+    start_year, start_month = int(start_parts[0]), int(start_parts[1])
+
+    start_month_first = f"{start_year:04d}-{start_month:02d}-01"
+    end_date = f"{year:04d}-12-01"
+
+    mbh_rows = (
+        db.query(MainBankHistory)
+        .filter_by(user_id=user_id)
+        .order_by(MainBankHistory.valid_from.asc())
+        .all()
+    )
+    pm_by_id: dict[str, PaymentMethod] = {
+        pm.id: pm
+        for pm in db.query(PaymentMethod).filter_by(user_id=user_id).all()
+    }
+    all_txs = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.billing_month >= start_month_first,
+            Transaction.billing_month <= end_date,
+        )
+        .all()
+    )
+    txs_by_month: dict[str, list[Transaction]] = defaultdict(list)
+    for tx in all_txs:
+        txs_by_month[tx.billing_month].append(tx)
+
+    all_transfers = (
+        db.query(Transfer)
+        .filter(
+            Transfer.user_id == user_id,
+            Transfer.billing_month >= start_month_first,
+            Transfer.billing_month <= end_date,
+        )
+        .all()
+    )
+    transfers_by_month: dict[str, list[Transfer]] = defaultdict(list)
+    for t in all_transfers:
+        transfers_by_month[t.billing_month].append(t)
+
+    mbh_dates = [row.valid_from for row in mbh_rows]
+
+    balance = 0.0
+    curr_year, curr_month = start_year, start_month
+    result: dict[int, float] = {}
+
+    while (curr_year, curr_month) <= (year, 12):
+        month_first = f"{curr_year:04d}-{curr_month:02d}-01"
+
+        idx = bisect.bisect_right(mbh_dates, month_first) - 1
+        mbh = mbh_rows[idx] if idx >= 0 else None
+
+        if mbh:
+            if mbh.valid_from == month_first:
+                balance = float(mbh.opening_balance)
+            pm = pm_by_id.get(mbh.payment_method_id)
+            if pm:
+                for tx in txs_by_month.get(month_first, []):
+                    if tx.payment_method_id == pm.id:
+                        if tx.transaction_direction == "income":
+                            balance += float(tx.amount)
+                        else:
+                            balance -= float(tx.amount)
+                    elif tx.transaction_direction == "credit":
+                        balance -= float(tx.amount)
+                for t in transfers_by_month.get(month_first, []):
+                    if t.from_account_name == pm.name:
+                        balance -= float(t.amount)
+                    elif t.to_account_name == pm.name:
+                        balance += float(t.amount)
+
+        if curr_year == year:
+            result[curr_month] = balance
+
+        curr_year, curr_month = _advance_month(curr_year, curr_month)
+
+    for m in range(1, 13):
+        result.setdefault(m, 0.0)
+
+    return result
+
+
 def _advance_month(year: int, month: int):
     if month == 12:
         return year + 1, 1

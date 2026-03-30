@@ -18,10 +18,7 @@ async def lifespan(app: FastAPI):
         try:
             seed_tax_config(db)
         finally:
-            try:
-                next(db_gen)
-            except StopIteration:
-                pass
+            db_gen.close()
     else:
         from alembic import command
         from alembic.config import Config

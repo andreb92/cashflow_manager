@@ -35,40 +35,43 @@ def decrypt_cookie(token: str, hex_key: str) -> Optional[str]:
         return None
 
 
-def discover_endpoints(issuer_url: str) -> dict:
+async def discover_endpoints(issuer_url: str) -> dict:
     url = issuer_url.rstrip("/") + "/.well-known/openid-configuration"
-    resp = httpx.get(url, timeout=10)
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, timeout=10)
     resp.raise_for_status()
     return resp.json()
 
 
-def exchange_code(
+async def exchange_code(
     code: str,
     token_endpoint: str,
     redirect_uri: str,
     client_id: str,
     client_secret: str,
 ) -> dict:
-    resp = httpx.post(
-        token_endpoint,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-        timeout=10,
-    )
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            token_endpoint,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            timeout=10,
+        )
     resp.raise_for_status()
     return resp.json()
 
 
-def get_userinfo(userinfo_endpoint: str, access_token: str) -> dict:
-    resp = httpx.get(
-        userinfo_endpoint,
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10,
-    )
+async def get_userinfo(userinfo_endpoint: str, access_token: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            userinfo_endpoint,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
     resp.raise_for_status()
     return resp.json()

@@ -66,7 +66,7 @@ def delete_tax_config(config_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(404, "Not found")
     if row.user_id != current_user.id:
         raise HTTPException(403, "Cannot delete a system-seeded or another user's tax config")
-    earliest = db.query(TaxConfig).order_by(TaxConfig.valid_from).first()
+    earliest = db.query(TaxConfig).filter(TaxConfig.user_id == current_user.id).order_by(TaxConfig.valid_from).first()
     if earliest and earliest.id == config_id:
         raise HTTPException(400, "Cannot delete the earliest tax config row")
     db.delete(row)

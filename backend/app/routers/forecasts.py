@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.forecast import Forecast, ForecastLine, ForecastAdjustment
@@ -18,7 +18,7 @@ class ForecastCreate(BaseModel):
 
 class ForecastUpdate(BaseModel):
     name: Optional[str] = None
-    projection_years: Optional[int] = None
+    projection_years: Optional[int] = Field(default=None, ge=1)
 
 
 class ForecastLineCreate(BaseModel):
@@ -103,7 +103,7 @@ def update_forecast(fc_id: str, req: ForecastUpdate, current_user: User = Depend
         raise HTTPException(404, "Not found")
     if req.name:
         fc.name = req.name
-    if req.projection_years:
+    if req.projection_years is not None:
         new_end = f"{fc.base_year + req.projection_years:04d}-12-01"
         # Delete adjustments beyond new end
         for line in db.query(ForecastLine).filter_by(forecast_id=fc_id).all():

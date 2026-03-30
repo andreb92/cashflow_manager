@@ -80,6 +80,7 @@ def create_transaction(
                 installment_total=req.installment_total,
                 installment_index=inst["installment_index"],
                 parent_transaction_id=parent.id,
+                notes=req.notes,
             ))
         db.commit()
         db.refresh(parent)

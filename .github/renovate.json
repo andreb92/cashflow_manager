@@ -8,7 +8,9 @@
     {
       "matchManagers": ["pip_requirements", "npm"],
       "matchUpdateTypes": ["patch"],
-      "automerge": true
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
     },
     {
       "matchManagers": ["pip_requirements", "npm"],

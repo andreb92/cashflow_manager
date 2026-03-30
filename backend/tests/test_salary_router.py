@@ -1,5 +1,3 @@
-from tests.conftest import *  # noqa: F401,F403
-
 
 def _make_user_and_login(client):
     client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "pass123", "name": "U"})

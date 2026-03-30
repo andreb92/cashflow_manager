@@ -164,8 +164,8 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
       qc.invalidateQueries({ queryKey: ['analytics'] });
       onSuccess();
     },
-    onError: (err: any) => {
-      const detail = err?.response?.data?.detail;
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
       setSubmitError(
         typeof detail === 'string'
           ? detail

@@ -93,11 +93,11 @@ OIDC_ID_TOKEN_COOKIE = "oidc_id_token"
 
 
 @router.get("/oidc/login")
-def oidc_login(response: Response):
+async def oidc_login(response: Response):
     settings = get_settings()
     if not settings.oidc_enabled:
         raise HTTPException(status_code=404, detail="OIDC not enabled")
-    endpoints = _oidc.discover_endpoints(settings.oidc_issuer_url)
+    endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
     state = _secrets.token_urlsafe(16)
     auth_url = (
         f"{endpoints['authorization_endpoint']}"
@@ -111,7 +111,7 @@ def oidc_login(response: Response):
 
 
 @router.get("/oidc/callback")
-def oidc_callback(
+async def oidc_callback(
     code: str,
     state: str,
     response: Response,
@@ -123,8 +123,8 @@ def oidc_callback(
         raise HTTPException(status_code=404, detail="OIDC not enabled")
     if oidc_state is None or oidc_state != state:
         raise HTTPException(status_code=400, detail="Invalid state")
-    endpoints = _oidc.discover_endpoints(settings.oidc_issuer_url)
-    tokens = _oidc.exchange_code(
+    endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
+    tokens = await _oidc.exchange_code(
         code,
         endpoints["token_endpoint"],
         settings.oidc_redirect_uri,
@@ -133,13 +133,19 @@ def oidc_callback(
     )
     userinfo_ep = endpoints.get("userinfo_endpoint")
     if userinfo_ep:
-        info = _oidc.get_userinfo(userinfo_ep, tokens["access_token"])
+        info = await _oidc.get_userinfo(userinfo_ep, tokens["access_token"])
     else:
-        import json as _json, base64 as _b64
+        import jwt as _pyjwt
+        from jwt import PyJWKClient
         id_token = tokens.get("id_token", "")
-        parts = id_token.split(".")
-        padded = parts[1] + "=" * (-len(parts[1]) % 4)
-        info = _json.loads(_b64.urlsafe_b64decode(padded))
+        jwks_client = PyJWKClient(endpoints["jwks_uri"])
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+        info = _pyjwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256", "ES256"],
+            audience=settings.oidc_client_id,
+        )
 
     sub = info.get("sub") or info.get("oid")
     email = info.get("email")
@@ -168,7 +174,7 @@ def oidc_callback(
 
 
 @router.get("/oidc/logout")
-def oidc_logout(
+async def oidc_logout(
     response: Response,
     oidc_id_token: Annotated[str | None, Cookie()] = None,
 ):
@@ -177,7 +183,7 @@ def oidc_logout(
     response.delete_cookie(key=OIDC_ID_TOKEN_COOKIE)
     if settings.oidc_enabled and oidc_id_token:
         try:
-            endpoints = _oidc.discover_endpoints(settings.oidc_issuer_url)
+            endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
             end_session = endpoints.get("end_session_endpoint")
             if end_session:
                 id_token = _oidc.decrypt_cookie(oidc_id_token, settings.session_encryption_key)

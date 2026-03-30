@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 import bcrypt
-from jose import jwt, JWTError
+import jwt as pyjwt
+from jwt.exceptions import InvalidTokenError
 from app.config import get_settings
 
 
@@ -24,12 +25,12 @@ def create_access_token(
     else:
         expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_expire_days)
     payload["exp"] = expire
-    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    return pyjwt.encode(payload, settings.secret_key, algorithm="HS256")
 
 
 def decode_access_token(token: str) -> Optional[dict[str, Any]]:
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
-    except JWTError:
+        return pyjwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except InvalidTokenError:
         return None
