@@ -1,11 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { AuthProvider } from '../../src/contexts/AuthContext';
-import SettingsPage from '../../src/pages/settings/SettingsPage';
 import PaymentMethodsSettings from '../../src/pages/settings/PaymentMethodsSettings';
 import CategoriesSettings from '../../src/pages/settings/CategoriesSettings';
 
