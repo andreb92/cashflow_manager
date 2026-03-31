@@ -6,7 +6,6 @@ const fmt = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 2 
 interface Props {
   projection: ForecastProjection;
   onAddAdjustment: (lineId: string) => void;
-  showActual?: boolean;
 }
 
 export default function ForecastGrid({ projection, onAddAdjustment }: Props) {

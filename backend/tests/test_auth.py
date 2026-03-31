@@ -40,7 +40,7 @@ def client():
 
 
 def test_register_creates_user(client):
-    resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass123", "name": "Alice"})
+    resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["email"] == "a@b.com"
@@ -48,35 +48,35 @@ def test_register_creates_user(client):
 
 
 def test_register_duplicate_email_returns_409(client):
-    client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "p", "name": "A"})
-    resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "p2", "name": "B"})
+    client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "password1", "name": "A"})
+    resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "password2", "name": "B"})
     assert resp.status_code == 409
 
 
 def test_login_returns_cookie(client):
-    client.post("/api/v1/auth/register", json={"email": "u@u.com", "password": "pw", "name": "U"})
-    resp = client.post("/api/v1/auth/login", json={"email": "u@u.com", "password": "pw"})
+    client.post("/api/v1/auth/register", json={"email": "u@u.com", "password": "password1", "name": "U"})
+    resp = client.post("/api/v1/auth/login", json={"email": "u@u.com", "password": "password1"})
     assert resp.status_code == 200
     assert "access_token" in resp.cookies
 
 
 def test_login_wrong_password_returns_401(client):
-    client.post("/api/v1/auth/register", json={"email": "u@u.com", "password": "pw", "name": "U"})
+    client.post("/api/v1/auth/register", json={"email": "u@u.com", "password": "password1", "name": "U"})
     resp = client.post("/api/v1/auth/login", json={"email": "u@u.com", "password": "wrong"})
     assert resp.status_code == 401
 
 
 def test_me_returns_current_user(client):
-    client.post("/api/v1/auth/register", json={"email": "me@test.com", "password": "pw", "name": "Me"})
-    client.post("/api/v1/auth/login", json={"email": "me@test.com", "password": "pw"})
+    client.post("/api/v1/auth/register", json={"email": "me@test.com", "password": "password1", "name": "Me"})
+    client.post("/api/v1/auth/login", json={"email": "me@test.com", "password": "password1"})
     resp = client.get("/api/v1/auth/me")
     assert resp.status_code == 200
     assert resp.json()["email"] == "me@test.com"
 
 
 def test_logout_clears_cookie(client):
-    client.post("/api/v1/auth/register", json={"email": "x@x.com", "password": "p", "name": "X"})
-    client.post("/api/v1/auth/login", json={"email": "x@x.com", "password": "p"})
+    client.post("/api/v1/auth/register", json={"email": "x@x.com", "password": "password1", "name": "X"})
+    client.post("/api/v1/auth/login", json={"email": "x@x.com", "password": "password1"})
     resp = client.post("/api/v1/auth/logout")
     assert resp.status_code == 200
     # After logout the cookie should be cleared (max_age=0 or deleted)
@@ -112,12 +112,22 @@ def test_secure_config_no_warning(caplog):
 
 def test_delete_me_clears_access_token_cookie(client):
     """Account deletion must clear the access_token cookie, not a stale cashflow_jwt name."""
-    client.post("/api/v1/auth/register", json={"email": "del_cookie@test.com", "password": "pw", "name": "D"})
-    resp = client.request("DELETE", "/api/v1/users/me", json={"password": "pw"})
+    client.post("/api/v1/auth/register", json={"email": "del_cookie@test.com", "password": "password1", "name": "D"})
+    resp = client.request("DELETE", "/api/v1/users/me", json={"password": "password1"})
     assert resp.status_code == 200
     set_cookie = resp.headers.get("set-cookie", "")
     assert "access_token" in set_cookie
     assert "cashflow_jwt" not in set_cookie
+
+
+def test_oidc_logout_without_cookie_redirects_to_login(client):
+    """oidc_logout with no oidc_id_token cookie must redirect to /login, not crash."""
+    # Ensure no oidc_id_token cookie is present
+    client.cookies.clear()
+    resp = client.get("/api/v1/auth/oidc/logout", follow_redirects=False)
+    # Should redirect to /login (no valid OIDC session to terminate)
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/login"
 
 
 def test_development_mode_suppresses_warning(caplog):
@@ -128,3 +138,103 @@ def test_development_mode_suppresses_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="cashflow.config"):
         s.warn_insecure_defaults()
     assert caplog.records == []
+
+
+# --- H-1 / H-2: RegisterRequest validation ---
+
+def test_register_invalid_email_returns_422(client):
+    """Email without '@' must be rejected at schema validation (422)."""
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={"email": "notanemail", "password": "password1", "name": "Bad"},
+    )
+    assert resp.status_code == 422
+
+
+def test_register_short_password_returns_422(client):
+    """Password shorter than 8 characters must be rejected at schema validation (422)."""
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={"email": "good@example.com", "password": "short", "name": "Bad"},
+    )
+    assert resp.status_code == 422
+
+
+def test_register_valid_email_and_min_length_password_succeeds(client):
+    """Valid email + exactly 8-character password must be accepted (200)."""
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={"email": "valid@example.com", "password": "12345678", "name": "Good"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "valid@example.com"
+
+
+def test_delete_me_wrong_password_returns_401(client):
+    """DELETE /users/me with the wrong password must return 401."""
+    client.post("/api/v1/auth/register", json={"email": "del@test.com", "password": "password1", "name": "Del"})
+    client.post("/api/v1/auth/login", json={"email": "del@test.com", "password": "password1"})
+    resp = client.request("DELETE", "/api/v1/users/me", json={"password": "wrongpassword"})
+    assert resp.status_code == 401
+
+
+def test_register_with_basic_auth_disabled_returns_403(client):
+    """POST /auth/register must return 403 when basic_auth_enabled is False."""
+    import os
+    from app.config import get_settings, Settings
+
+    os.environ["BASIC_AUTH_ENABLED"] = "false"
+    get_settings.cache_clear()
+    try:
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={"email": "new@test.com", "password": "password1", "name": "New"},
+        )
+        assert resp.status_code == 403
+    finally:
+        os.environ.pop("BASIC_AUTH_ENABLED", None)
+        get_settings.cache_clear()
+
+
+def test_oidc_logout_with_valid_id_token_cookie_redirects_with_hint(client):
+    """oidc_logout with a valid encrypted oidc_id_token cookie must redirect
+    to the end_session_endpoint with id_token_hint in the URL."""
+    import os
+    from unittest.mock import patch, AsyncMock
+    from app.services.oidc import encrypt_cookie
+    from app.config import get_settings
+
+    # Build an encrypted cookie containing a fake id_token
+    fake_id_token = "fake.id.token"
+    enc_key = "0" * 64  # matches default session_encryption_key in dev mode
+    encrypted = encrypt_cookie(fake_id_token, enc_key)
+
+    fake_endpoints = {
+        "authorization_endpoint": "https://idp.example.com/auth",
+        "token_endpoint": "https://idp.example.com/token",
+        "end_session_endpoint": "https://idp.example.com/logout",
+    }
+
+    os.environ["OIDC_ENABLED"] = "true"
+    os.environ["OIDC_ISSUER_URL"] = "https://idp.example.com"
+    os.environ["OIDC_CLIENT_ID"] = "test-client"
+    os.environ["OIDC_CLIENT_SECRET"] = "test-secret"
+    os.environ["OIDC_REDIRECT_URI"] = "https://app.example.com/callback"
+    get_settings.cache_clear()
+
+    try:
+        with patch(
+            "app.routers.auth._oidc.discover_endpoints",
+            new=AsyncMock(return_value=fake_endpoints),
+        ):
+            client.cookies.set("oidc_id_token", encrypted)
+            resp = client.get("/api/v1/auth/oidc/logout", follow_redirects=False)
+
+        assert resp.status_code in (302, 307)
+        location = resp.headers["location"]
+        assert "id_token_hint=" in location
+        assert fake_id_token in location
+    finally:
+        for key in ("OIDC_ENABLED", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI"):
+            os.environ.pop(key, None)
+        get_settings.cache_clear()

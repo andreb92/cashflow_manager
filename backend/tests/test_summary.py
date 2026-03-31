@@ -63,3 +63,77 @@ def test_summary_month_shows_outcomes_by_method(client):
     outcomes = r.json()["outcomes_by_method"]
     assert "MyBank" in outcomes
     assert outcomes["MyBank"] == pytest.approx(750.0)
+
+
+def test_year_summary_stamp_duty_credit_card(client):
+    """year_monthly_summaries inline loop: CC with has_stamp_duty=True and spend > €77.47
+    should produce stamp_duty == 2.0 for months with high enough spend, 0.0 otherwise."""
+    _setup(client)
+
+    # Create a credit card with stamp duty enabled
+    r = client.post("/api/v1/payment-methods", json={
+        "name": "StampCC", "type": "credit_card", "has_stamp_duty": True
+    })
+    assert r.status_code == 200
+    card_id = r.json()["id"]
+
+    cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Housing")
+
+    # Transactions dated in Feb 2026 → billing_month = 2026-03-01 (credit cards bill next month)
+    for amount in [50.0, 30.0]:  # total 80.0 > 77.47
+        client.post("/api/v1/transactions", json={
+            "date": "2026-02-10", "detail": "CC spend",
+            "amount": amount, "payment_method_id": card_id,
+            "category_id": cat_id, "transaction_direction": "debit",
+        })
+
+    # Transactions dated in Apr 2026 → billing_month = 2026-05-01; total 40.0 < 77.47
+    client.post("/api/v1/transactions", json={
+        "date": "2026-04-10", "detail": "Small CC spend",
+        "amount": 40.0, "payment_method_id": card_id,
+        "category_id": cat_id, "transaction_direction": "debit",
+    })
+
+    r = client.get("/api/v1/summary/2026")
+    assert r.status_code == 200
+    months = r.json()
+
+    # March (month=3) should have stamp_duty == 2.0
+    march = next(m for m in months if m["month"] == 3)
+    assert march["stamp_duty"] == pytest.approx(2.0)
+
+    # May (month=5) should have stamp_duty == 0.0 (spend below threshold)
+    may = next(m for m in months if m["month"] == 5)
+    assert may["stamp_duty"] == pytest.approx(0.0)
+
+    # January (no CC spend) should have stamp_duty == 0.0
+    january = next(m for m in months if m["month"] == 1)
+    assert january["stamp_duty"] == pytest.approx(0.0)
+
+
+def test_year_summary_transfers_in_bank(client):
+    """transfers_in_bank should be non-zero when a transfer targets a bank-type account."""
+    _setup(client)
+
+    # Create a second bank account to receive a transfer
+    r = client.post("/api/v1/payment-methods", json={"name": "SavingsBank", "type": "bank"})
+    assert r.status_code == 200
+
+    # Post a transfer with to_account_type = "bank"
+    client.post("/api/v1/transfers", json={
+        "date": "2026-03-15", "detail": "Transfer in",
+        "amount": 300.0,
+        "from_account_type": "saving", "from_account_name": "MySavings",
+        "to_account_type": "bank", "to_account_name": "SavingsBank",
+    })
+
+    r = client.get("/api/v1/summary/2026")
+    assert r.status_code == 200
+    months = r.json()
+
+    march = next(m for m in months if m["month"] == 3)
+    assert march["transfers_in_bank"] == pytest.approx(300.0)
+
+    # Other months should have zero transfers_in_bank
+    january = next(m for m in months if m["month"] == 1)
+    assert january["transfers_in_bank"] == pytest.approx(0.0)

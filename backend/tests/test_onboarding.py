@@ -115,6 +115,49 @@ def test_re_onboarding_cleans_up_main_bank_history(client, db):
     assert orphans == 0, f"Found {orphans} orphaned MainBankHistory rows after re-onboarding"
 
 
+def test_resubmit_onboarding_deletes_transactions_and_transfers(client, db):
+    """Re-submitting onboarding must wipe existing Transaction and Transfer rows."""
+    from app.models.transaction import Transaction
+    from app.models.transfer import Transfer
+
+    client.post("/api/v1/auth/register", json={
+        "email": "resubmit@example.com", "password": "Password1!", "name": "Resubmit"
+    })
+    r1 = client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    assert r1.status_code == 200
+
+    # Fetch the main bank payment method id so we can create a transaction
+    from app.models.payment_method import PaymentMethod
+    db.expire_all()
+    main_pm = db.query(PaymentMethod).filter_by(name="MyBank").first()
+    assert main_pm is not None
+
+    # Directly insert a Transaction row to simulate existing data
+    from app.models.user import User
+    user = db.query(User).filter_by(email="resubmit@example.com").first()
+    txn = Transaction(
+        user_id=user.id,
+        date="2026-01-15",
+        detail="Test expense",
+        amount=100.0,
+        payment_method_id=main_pm.id,
+        transaction_direction="debit",
+        billing_month="2026-01",
+    )
+    db.add(txn)
+    db.commit()
+
+    assert db.query(Transaction).filter_by(user_id=user.id).count() == 1
+
+    # Re-submit onboarding
+    r2 = client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    assert r2.status_code == 200
+
+    db.expire_all()
+    assert db.query(Transaction).filter_by(user_id=user.id).count() == 0
+    assert db.query(Transfer).filter_by(user_id=user.id).count() == 0
+
+
 def test_onboarding_salary_months_stored(client):
     client.post("/api/v1/auth/register", json={
         "email": "bob@example.com", "password": "Password1!", "name": "Bob"

@@ -58,7 +58,7 @@ export default function TransactionList({ dateMonth }: Props) {
             key={tx.id}
             tx={tx}
             method={methodMap[tx.payment_method_id]}
-            category={categoryMap[tx.category_id]}
+            category={tx.category_id ? categoryMap[tx.category_id] : undefined}
             onEdit={() => setEditTx(tx)}
             onDelete={() => setDeleteTx(tx)}
           />

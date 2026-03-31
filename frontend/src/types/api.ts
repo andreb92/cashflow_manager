@@ -17,6 +17,7 @@ export interface PaymentMethod {
   linked_bank_id: string | null;
   opening_balance: number | null;
   is_active: boolean;
+  has_stamp_duty?: boolean;
 }
 
 // Categories
@@ -36,7 +37,7 @@ export interface Transaction {
   detail: string;
   amount: number;
   payment_method_id: string;
-  category_id: string;
+  category_id: string | null;
   transaction_direction: 'debit' | 'income' | 'credit';
   billing_month: string;
   recurrence_months: number | null;
@@ -75,6 +76,7 @@ export interface MonthlySummary {
   transfers_out_bank: number;
   transfers_in_bank: number;
   bank_balance: number;
+  stamp_duty?: number;
 }
 
 // Assets
@@ -170,8 +172,6 @@ export interface Forecast {
 
 export interface ForecastLine {
   id: string;
-  forecast_id: string;
-  user_id: string;
   source_transaction_id: string | null;
   category_id: string | null;
   detail: string;

@@ -39,6 +39,21 @@ beforeEach(() => {
   );
 });
 
+test('DashboardPage renders without crashing', async () => {
+  render(<DashboardPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText(/bank balance/i)).toBeInTheDocument());
+});
+
+test('DashboardPage shows current month income and outcomes', async () => {
+  render(<DashboardPage />, { wrapper });
+  // Income label and formatted value from mocked data (3000 → "3.000,00")
+  await waitFor(() => expect(screen.getByText(/income/i)).toBeInTheDocument());
+  expect(screen.getByText(/3\.000/)).toBeInTheDocument();
+  // Outcomes by method section shows the Visa entry (800 → "800,00")
+  expect(screen.getByText('Visa')).toBeInTheDocument();
+  expect(screen.getByText(/800/)).toBeInTheDocument();
+});
+
 test('DashboardPage shows bank balance for current month', async () => {
   render(<DashboardPage />, { wrapper });
   await waitFor(() => expect(screen.getByText(/4\.500/)).toBeInTheDocument());

@@ -10,8 +10,6 @@ import type { SalaryConfig } from '../types/api';
 import { fmt } from '../utils/format';
 
 function BreakdownPanel({ config }: { config: SalaryConfig }) {
-  const today = new Date().toISOString().slice(0, 7);
-
   const { data: breakdown } = useQuery({
     queryKey: [
       'salary', 'calculate', config.id,
@@ -20,7 +18,7 @@ function BreakdownPanel({ config }: { config: SalaryConfig }) {
     ],
     queryFn: () =>
       salaryApi.calculate({
-        as_of: today,
+        as_of: config.valid_from,
         ral: config.ral,
         employer_contrib_rate: config.employer_contrib_rate,
         voluntary_contrib_rate: config.voluntary_contrib_rate,

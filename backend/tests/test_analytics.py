@@ -134,3 +134,74 @@ def test_category_spending_aggregates_correctly(client):
     row = next((x for x in r.json() if x["type"] == "Housing"), None)
     assert row is not None
     assert row["total_amount"] == pytest.approx(n * 100.0)
+
+
+def test_analytics_payment_method_ids_filter(client):
+    """payment_method_ids filter returns only transactions for the specified PM."""
+    pm_id, cat_id = _setup(client)
+
+    # Create a second payment method
+    r2 = client.post("/api/v1/payment-methods", json={"name": "SecondCard", "type": "credit_card"})
+    assert r2.status_code == 200
+    pm2_id = r2.json()["id"]
+
+    # Transaction on pm1
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "PM1 expense",
+        "amount": 100, "payment_method_id": pm_id,
+        "category_id": cat_id, "transaction_direction": "debit",
+    })
+    # Transaction on pm2 (credit card → billing_month = 2026-02-01)
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "PM2 expense",
+        "amount": 200, "payment_method_id": pm2_id,
+        "category_id": cat_id, "transaction_direction": "debit",
+    })
+
+    # Filter by pm1 only, spanning both potential billing months
+    r = client.get(
+        "/api/v1/analytics/categories",
+        params={"from": "2026-01", "to": "2026-02", "payment_method_ids": pm_id},
+    )
+    assert r.status_code == 200
+    rows = r.json()
+    # All returned rows must be from pm1 only; total should be 100, not 300
+    total = sum(row["total_amount"] for row in rows if row["type"] == "Housing")
+    assert total == pytest.approx(100.0)
+
+
+def test_analytics_direction_income_filter(client):
+    """direction=income filter returns income transactions and not debit ones."""
+    pm_id, cat_id = _setup(client)
+    sal_cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Salary")
+
+    # Income transaction
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-25", "detail": "Salary",
+        "amount": 2500, "payment_method_id": pm_id,
+        "category_id": sal_cat_id, "transaction_direction": "income",
+    })
+    # Debit transaction
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "Rent",
+        "amount": 900, "payment_method_id": pm_id,
+        "category_id": cat_id, "transaction_direction": "debit",
+    })
+
+    r_income = client.get(
+        "/api/v1/analytics/categories",
+        params={"from": "2026-01", "to": "2026-01", "direction": "income"},
+    )
+    assert r_income.status_code == 200
+    types_income = {row["type"] for row in r_income.json()}
+    assert "Salary" in types_income
+    assert "Housing" not in types_income
+
+    r_debit = client.get(
+        "/api/v1/analytics/categories",
+        params={"from": "2026-01", "to": "2026-01", "direction": "debit"},
+    )
+    assert r_debit.status_code == 200
+    types_debit = {row["type"] for row in r_debit.json()}
+    assert "Housing" in types_debit
+    assert "Salary" not in types_debit

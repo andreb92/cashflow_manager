@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -16,7 +17,7 @@ class OverrideRequest(BaseModel):
 @router.get("/{year}")
 def list_assets(year: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = compute_assets(current_user.id, year, db)
-    return [r.__dict__ for r in rows]
+    return [asdict(r) for r in rows]
 
 @router.put("/{year}/{asset_type}/{asset_name}")
 def set_override(

@@ -28,6 +28,7 @@ export default function SummaryPage() {
       highlight: false,
     })),
     { label: 'Transfers out', values: months.map((m) => fmt(m.transfers_out_bank)), highlight: false },
+    { label: 'Stamp duty', values: months.map((m) => fmt(m.stamp_duty ?? 0)), highlight: false },
   ];
 
   const currentMonth = new Date().getMonth() + 1;

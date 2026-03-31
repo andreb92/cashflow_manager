@@ -43,7 +43,7 @@ npm run test -- src/tests/transactions.test.ts
 
 ### Docker
 ```bash
-docker-compose up    # Start both services (backend:8000, frontend:3000)
+docker compose up    # Start both services (backend:8000, frontend:3000)
 ```
 
 ## Docs
@@ -62,15 +62,17 @@ docker-compose up    # Start both services (backend:8000, frontend:3000)
 FastAPI app with SQLAlchemy (SQLite) and Alembic migrations.
 
 - **`main.py`** — App init, router registration, lifespan context
-- **`config.py`** — Pydantic settings loaded from `.env` (`DB_PATH`, `JWT_SECRET_KEY`, OIDC config)
+- **`config.py`** — Pydantic settings loaded from `.env` (`DB_PATH`, `SECRET_KEY`, OIDC config)
 - **`database.py`** — SQLAlchemy `Base`, `get_session_factory()`
 - **`deps.py`** — FastAPI dependencies: `get_db` (DB session), `get_current_user` (JWT auth)
-- **`models/`** — SQLAlchemy ORM models: `User`, `PaymentMethod`, `Transaction`, `Transfer`, `Asset`, `Category`, `SalaryConfig`, `TaxConfig`, `Forecast`, `MainBankHistory`
+- **`models/`** — SQLAlchemy ORM models: `User`, `PaymentMethod`, `Transaction`, `Transfer`, `Asset`, `Category`, `SalaryConfig`, `TaxConfig`, `Forecast`, `ForecastLine`, `ForecastAdjustment`, `MainBankHistory`, `UserSetting`
 - **`routers/`** — One router per domain, all included at `/api/v1` prefix
 - **`schemas/`** — Pydantic request/response schemas (separate from ORM models)
-- **`services/`** — Business logic: `auth`, `forecasting`, `bank_balance`
+- **`services/`** — Business logic: `analytics`, `assets`, `auth`, `bank_balance`, `billing`, `forecasting`, `installments`, `oidc`, `recurrence`, `salary`, `seed`, `summary`, `tax`
 
 All models use UUID string PKs via `gen_uuid()`. Database is SQLite at `DB_PATH` (default `/app/data/cashflow.db`).
+
+> **Local dev note:** Set `DEVELOPMENT_MODE=true` in your `.env` for local development. Since commit 770b89f, insecure defaults for `SECRET_KEY`/`SESSION_ENCRYPTION_KEY` raise a `ValueError` at startup rather than warn — `DEVELOPMENT_MODE=true` bypasses this check.
 
 ### Frontend (`frontend/src/`)
 
@@ -89,7 +91,7 @@ React 18 + TypeScript, Vite, TanStack Query, React Hook Form + Zod.
 
 - Register/Login set an httponly cookie (`access_token`, JWT HS256)
 - All subsequent requests include credentials; the backend reads the cookie
-- `GET /api/v1/me` returns the current user
+- `GET /api/v1/auth/me` returns the current user
 - Optional OIDC support configurable via `.env`
 
 ### Testing Patterns

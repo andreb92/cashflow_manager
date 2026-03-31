@@ -92,13 +92,14 @@ export default function TransferForm({ onSuccess, initial }: Props) {
       qc.invalidateQueries({ queryKey: ['assets'] });
       onSuccess();
     },
-    onError: (err: any) => {
-      const detail = err?.response?.data?.detail;
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: unknown } } };
+      const detail = axiosErr?.response?.data?.detail;
       setSubmitError(
         typeof detail === 'string'
           ? detail
           : Array.isArray(detail)
-          ? detail.map((d: any) => d.msg).join('; ')
+          ? detail.map((d: { msg?: string }) => d.msg ?? String(d)).join('; ')
           : 'Failed to save. Please check your inputs and try again.'
       );
     },

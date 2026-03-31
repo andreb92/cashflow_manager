@@ -62,6 +62,7 @@ These variables are read by Vite during the frontend build and are not used at r
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_BASE_URL` | — | API base URL for the frontend. Only needed when running Vite's dev server against a remote backend. In production the Nginx proxy makes this unnecessary. |
+| `DEVELOPMENT_MODE` | `false` | When `true`, bypasses the startup insecure-defaults check. Required for local development when using non-production `SECRET_KEY`/`SESSION_ENCRYPTION_KEY`. |
 
 ---
 
@@ -73,6 +74,6 @@ See `deploy/.env.example` for the production template, or `.env.example` at the 
 
 ## Notes
 
-- All variables are optional except `SECRET_KEY` and `SESSION_ENCRYPTION_KEY` in production (the backend will start with insecure defaults but warn).
+- All variables are optional except `SECRET_KEY` and `SESSION_ENCRYPTION_KEY` in production (without them the backend will raise a `ValueError` and fail to start unless `DEVELOPMENT_MODE=true`).
 - `BASIC_AUTH_ENABLED` and `OIDC_ENABLED` can be toggled independently without data loss. Users who registered via basic auth and have an OIDC account with the same email are automatically merged.
 - Changing `TZ` does not retroactively shift stored timestamps; it affects how new timestamps and billing boundaries are computed.

@@ -43,13 +43,11 @@ export default function AnalyticsPage() {
         ...(filters.categoryIds.length ? { category_ids: filters.categoryIds.join(',') } : {}),
         ...(filters.paymentMethodIds.length ? { payment_method_ids: filters.paymentMethodIds.join(',') } : {}),
       }),
-    refetchInterval: 30_000,
   });
 
   const { data: transferRows = [] } = useQuery({
     queryKey: ['analytics', 'transfers', filters.from, filters.to],
     queryFn: () => analyticsApi.transfers({ from: filters.from, to: filters.to }),
-    refetchInterval: 30_000,
   });
 
   const { data: categories = [] } = useQuery({

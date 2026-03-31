@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -30,7 +31,8 @@ beforeEach(() => {
         { id: 'cat2', type: 'Leisure', sub_type: 'Restaurants', is_active: true },
       ])
     ),
-    http.get('/api/v1/payment-methods', () => HttpResponse.json([]))
+    http.get('/api/v1/payment-methods', () => HttpResponse.json([])),
+    http.get('/api/v1/analytics/transfers', () => HttpResponse.json([]))
   );
 });
 
@@ -45,4 +47,33 @@ test('AnalyticsPage shows chart tabs for bar and line views', async () => {
     expect(screen.getByRole('button', { name: /bar/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cumulative/i })).toBeInTheDocument();
   });
+});
+
+test('AnalyticsPage chart renders category labels from mocked data', async () => {
+  render(<AnalyticsPage />, { wrapper });
+  // The Recharts Legend renders category labels as text nodes in the DOM.
+  // Category labels are formatted as "type/sub_type" by the chart component.
+  await waitFor(() => {
+    expect(screen.getByText('Personal/Food')).toBeInTheDocument();
+  });
+  expect(screen.getByText('Leisure/Restaurants')).toBeInTheDocument();
+});
+
+test('AnalyticsPage switching to cumulative view changes active button variant', async () => {
+  const user = userEvent.setup();
+  render(<AnalyticsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByRole('button', { name: /cumulative/i })).toBeInTheDocument());
+
+  const barBtn = screen.getByRole('button', { name: /bar/i });
+  const cumBtn = screen.getByRole('button', { name: /cumulative/i });
+
+  // Initially bar is primary (contains bg-blue-600), cumulative is secondary
+  expect(barBtn.className).toMatch(/bg-blue-600/);
+  expect(cumBtn.className).not.toMatch(/bg-blue-600/);
+
+  await user.click(cumBtn);
+
+  // After click, cumulative becomes primary and bar becomes secondary
+  expect(cumBtn.className).toMatch(/bg-blue-600/);
+  expect(barBtn.className).not.toMatch(/bg-blue-600/);
 });

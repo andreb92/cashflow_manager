@@ -1,11 +1,12 @@
 from __future__ import annotations
+from decimal import Decimal
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal, Optional
 
 class TransactionCreate(BaseModel):
     date: str
     detail: str
-    amount: float = Field(gt=0)
+    amount: Decimal = Field(gt=0)
     payment_method_id: str
     category_id: Optional[str] = None
     transaction_direction: Literal['income', 'debit', 'credit']
@@ -20,6 +21,12 @@ class TransactionCreate(BaseModel):
         return self
 
 class TransactionUpdate(BaseModel):
+    # NOTE: payment_method_id is intentionally omitted from this schema.
+    # Changing the payment method would require recomputing billing_month (which is
+    # derived from the payment method's billing cycle) and cascading updates to any
+    # related installment or recurring child transactions. Allowing it here would
+    # silently leave billing_month stale and break financial reporting. Users must
+    # delete and recreate the transaction to change its payment method.
     date: Optional[str] = None
     detail: Optional[str] = None
     amount: Optional[float] = Field(None, gt=0)

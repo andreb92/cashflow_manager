@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -65,6 +65,49 @@ test('TransactionsPage opens add form when button clicked', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: /add transaction/i })).toBeInTheDocument());
   await user.click(screen.getByRole('button', { name: /add transaction/i }));
   expect(screen.getByRole('dialog')).toBeInTheDocument();
+});
+
+test('TransactionsPage renders transaction list with amounts and details', async () => {
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Grocery run')).toBeInTheDocument());
+  // Amount formatted as Italian locale: 45.50 → "45,50"
+  expect(screen.getByText(/45,50/)).toBeInTheDocument();
+  expect(screen.getByText('Salary')).toBeInTheDocument();
+  // Amount for salary: 2800 → "2.800,00"
+  expect(screen.getByText(/2\.800/)).toBeInTheDocument();
+});
+
+test('TransactionsPage delete button opens cascade modal', async () => {
+  const user = userEvent.setup();
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Grocery run')).toBeInTheDocument());
+
+  // Each transaction row has a Delete button; click the first one (Grocery run, non-recurring)
+  const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+  await user.click(deleteButtons[0]);
+
+  // CascadeDeleteModal opens as a dialog with title "Delete transaction"
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByText(/delete transaction/i)).toBeInTheDocument();
+  // Non-recurring: shows the simple confirmation message
+  expect(screen.getByText(/delete this transaction\?/i)).toBeInTheDocument();
+});
+
+test('TransactionsPage delete button opens cascade modal with recurring options for recurring transaction', async () => {
+  const user = userEvent.setup();
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Salary')).toBeInTheDocument());
+
+  // Salary transaction is recurring (recurrence_months: 12)
+  // It appears second in the list; find all Delete buttons and click the one for Salary
+  const salaryRow = screen.getByText('Salary').closest('li')!;
+  const deleteBtn = within(salaryRow).getByRole('button', { name: /delete/i });
+  await user.click(deleteBtn);
+
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  // Recurring variant shows cascade options
+  expect(screen.getByText(/recurring transaction/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /this one only/i })).toBeInTheDocument();
 });
 
 test('TransactionForm shows billing hint for credit_card payment method', async () => {

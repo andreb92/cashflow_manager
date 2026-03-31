@@ -11,7 +11,7 @@ export const authApi = {
   logout: () =>
     apiClient.post('/auth/logout'),
   oidcLoginUrl: () => '/api/v1/auth/oidc/login',
-  deleteMe: () => apiClient.delete('/users/me'),
+  deleteMe: (password: string) => apiClient.delete('/users/me', { data: { password } }),
 };
 
 export async function fetchMeOrNull(): Promise<User | null> {

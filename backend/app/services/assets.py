@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from dateutil.parser import parse as _p
+from dateutil.relativedelta import relativedelta as _rdelta
 from app.models.user import UserSetting
 from app.models.transfer import Transfer
 from app.models.asset import Asset
@@ -43,7 +45,7 @@ def compute_assets(user_id: str, year: int, db: Session) -> List[AssetRow]:
     year_transfers = (
         db.query(Transfer)
         .filter_by(user_id=user_id)
-        .filter(Transfer.date >= year_start, Transfer.date <= year_end)
+        .filter(Transfer.billing_month >= year_start, Transfer.billing_month <= year_end)
         .all()
     )
     from collections import defaultdict
@@ -85,8 +87,6 @@ def compute_assets(user_id: str, year: int, db: Session) -> List[AssetRow]:
         active_end = min(period_end, next_year_start)
         if active_start >= active_end:
             continue
-        from dateutil.parser import parse as _p
-        from dateutil.relativedelta import relativedelta as _rdelta
         rd = _rdelta(_p(active_end), _p(active_start))
         months_active = rd.years * 12 + rd.months
         ral = float(sc.ral)

@@ -84,6 +84,79 @@ def test_duplicate_pm_name_returns_422(client):
     assert resp2.status_code == 422
 
 
+def test_stamp_duty_appears_in_monthly_summary(client):
+    """Credit card with has_stamp_duty=True and spend > 77.47 → stamp_duty == 2.0 in summary."""
+    client.post("/api/v1/auth/register", json={
+        "email": "stamp@example.com", "password": "Password1!", "name": "Stamp"
+    })
+    from tests.test_onboarding import WIZARD_PAYLOAD
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+
+    # Create a credit card with stamp duty enabled
+    r = client.post("/api/v1/payment-methods", json={
+        "name": "StampCard", "type": "credit_card", "has_stamp_duty": True
+    })
+    assert r.status_code == 200
+    card_id = r.json()["id"]
+
+    # Create a category for the transactions
+    cat_r = client.post("/api/v1/categories", json={"type": "expense", "sub_type": "general"})
+    assert cat_r.status_code == 200
+    cat_id = cat_r.json()["id"]
+
+    # Post two transactions on this card dated in March 2026.
+    # Credit cards bill next month, so billing_month will be 2026-04-01.
+    for amount in [50.00, 30.00]:
+        tx_r = client.post("/api/v1/transactions", json={
+            "date": "2026-03-15",
+            "detail": "Purchase",
+            "amount": amount,
+            "payment_method_id": card_id,
+            "category_id": cat_id,
+            "transaction_direction": "debit",
+        })
+        assert tx_r.status_code == 200
+
+    # Query the monthly summary for April 2026 (credit card billing month)
+    r = client.get("/api/v1/summary/2026/4")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["stamp_duty"] == 2.0
+
+
+def test_rename_collision_returns_422(client):
+    """Renaming PM2 to PM1's existing name must return 422."""
+    _setup(client)
+
+    # Create two distinct payment methods
+    r1 = client.post("/api/v1/payment-methods", json={"name": "Alpha", "type": "prepaid"})
+    assert r1.status_code == 200
+
+    r2 = client.post("/api/v1/payment-methods", json={"name": "Beta", "type": "prepaid"})
+    assert r2.status_code == 200
+    beta_id = r2.json()["id"]
+
+    # Try to rename Beta → Alpha (collision)
+    resp = client.put(f"/api/v1/payment-methods/{beta_id}", json={"name": "Alpha"})
+    assert resp.status_code == 422
+
+
+def test_set_main_bank_on_inactive_pm_returns_422(client):
+    """set-main-bank on an inactive bank-type PM must be rejected with 422."""
+    _setup(client)
+
+    # Create a bank PM and immediately deactivate it
+    r = client.post("/api/v1/payment-methods", json={"name": "InactiveBank", "type": "bank"})
+    assert r.status_code == 200
+    pm_id = r.json()["id"]
+
+    client.put(f"/api/v1/payment-methods/{pm_id}", json={"is_active": False})
+
+    # Attempt to make it main bank
+    resp = client.post(f"/api/v1/payment-methods/{pm_id}/set-main-bank", json={"opening_balance": 0})
+    assert resp.status_code == 422
+
+
 def test_pm_rename_cascades_to_transfers(client):
     """Renaming a PM must update all Transfer rows referencing its old name."""
     from tests.test_onboarding import WIZARD_PAYLOAD

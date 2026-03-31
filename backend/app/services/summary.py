@@ -5,6 +5,43 @@ from app.models.payment_method import PaymentMethod
 from app.services.bank_balance import compute_bank_balance, compute_bank_balances_for_year
 
 
+_STAMP_DUTY_THRESHOLD = 77.47
+_STAMP_DUTY_AMOUNT = 2.00
+
+
+def _compute_stamp_duty(user_id: str, month_first: str, all_txs: list, db: Session) -> float:
+    """
+    Compute the Italian imposta di bollo (stamp duty) for a given month.
+
+    Rules:
+    - Only credit cards with has_stamp_duty == True are eligible.
+    - If monthly spend on such a card exceeds €77.47, add €2.00 per card.
+    """
+    stamp_duty_cards = (
+        db.query(PaymentMethod)
+        .filter_by(user_id=user_id, type="credit_card", has_stamp_duty=True)
+        .all()
+    )
+    if not stamp_duty_cards:
+        return 0.0
+
+    stamp_duty_card_ids = {pm.id for pm in stamp_duty_cards}
+
+    total = 0.0
+    for pm in stamp_duty_cards:
+        monthly_spend = sum(
+            float(tx.amount)
+            for tx in all_txs
+            if tx.payment_method_id == pm.id
+            and tx.billing_month == month_first
+            and tx.transaction_direction in ("debit", "credit")
+        )
+        if monthly_spend > _STAMP_DUTY_THRESHOLD:
+            total += _STAMP_DUTY_AMOUNT
+
+    return total
+
+
 def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
     month_first = f"{year:04d}-{month:02d}-01"
 
@@ -37,6 +74,8 @@ def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
 
     bank_balance = compute_bank_balance(user_id, year, month, db)
 
+    stamp_duty = _compute_stamp_duty(user_id, month_first, txs, db)
+
     return {
         "year": year,
         "month": month,
@@ -45,6 +84,7 @@ def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
         "transfers_out_bank": transfers_out,
         "transfers_in_bank": transfers_in,
         "bank_balance": bank_balance,
+        "stamp_duty": stamp_duty,
     }
 
 
@@ -90,6 +130,13 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
     # Single-pass bank balance computation for all 12 months
     bank_balances = compute_bank_balances_for_year(user_id, year, db)
 
+    # Load stamp-duty credit cards once for the whole year
+    stamp_duty_cards = (
+        db.query(PaymentMethod)
+        .filter_by(user_id=user_id, type="credit_card", has_stamp_duty=True)
+        .all()
+    )
+
     results = []
     for month in range(1, 13):
         txs = txs_by_month[month]
@@ -105,6 +152,18 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
         transfers_out = sum(float(t.amount) for t in transfers if t.from_account_type == "bank")
         transfers_in = sum(float(t.amount) for t in transfers if t.to_account_type == "bank")
 
+        month_first = f"{year:04d}-{month:02d}-01"
+        stamp_duty = 0.0
+        for pm in stamp_duty_cards:
+            monthly_spend = sum(
+                float(tx.amount)
+                for tx in txs
+                if tx.payment_method_id == pm.id
+                and tx.transaction_direction in ("debit", "credit")
+            )
+            if monthly_spend > _STAMP_DUTY_THRESHOLD:
+                stamp_duty += _STAMP_DUTY_AMOUNT
+
         results.append({
             "year": year,
             "month": month,
@@ -113,6 +172,7 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
             "transfers_out_bank": transfers_out,
             "transfers_in_bank": transfers_in,
             "bank_balance": bank_balances[month],
+            "stamp_duty": stamp_duty,
         })
 
     return results

@@ -16,6 +16,7 @@ class TransferCreate(BaseModel):
 
 
 class TransferUpdate(BaseModel):
+    date: Optional[str] = None
     detail: Optional[str] = None
     amount: Optional[float] = Field(None, gt=0)
     notes: Optional[str] = None

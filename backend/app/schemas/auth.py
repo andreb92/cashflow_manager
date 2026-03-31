@@ -1,11 +1,18 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Annotated, Optional
 
 
 class RegisterRequest(BaseModel):
     email: str
-    password: str
+    password: Annotated[str, Field(min_length=8)]
     name: str = ""
+
+    @field_validator("email")
+    @classmethod
+    def email_must_contain_at(cls, v: str) -> str:
+        if "@" not in v:
+            raise ValueError("Invalid email address: must contain '@'")
+        return v
 
 
 class LoginRequest(BaseModel):

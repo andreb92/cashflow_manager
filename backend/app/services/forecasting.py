@@ -12,7 +12,9 @@ def auto_generate_lines(forecast: Forecast, db: Session) -> None:
     Bulk-loads all siblings in one query to avoid N+1 per root.
     """
     year = forecast.base_year
-    year_start = f"{year:04d}-01-01"
+    # Look back 2 years so recurring transactions that started before base_year
+    # are still captured; children are not restricted to this window.
+    history_start = f"{year - 2:04d}-01-01"
     year_end = f"{year:04d}-12-31"
 
     recurring_roots = (
@@ -20,7 +22,7 @@ def auto_generate_lines(forecast: Forecast, db: Session) -> None:
         .filter_by(user_id=forecast.user_id)
         .filter(
             Transaction.recurrence_months.isnot(None),
-            Transaction.date >= year_start,
+            Transaction.date >= history_start,
             Transaction.date <= year_end,
             Transaction.parent_transaction_id.is_(None),  # roots only
         )
@@ -31,13 +33,13 @@ def auto_generate_lines(forecast: Forecast, db: Session) -> None:
 
     root_ids = [tx.id for tx in recurring_roots]
 
-    # Bulk-load all siblings (roots + children) in one query
+    # Bulk-load all siblings (roots + children) in one query.
+    # No date restriction on siblings so we capture all occurrences regardless
+    # of when the root was created.
     all_siblings = (
         db.query(Transaction)
         .filter(
             Transaction.user_id == forecast.user_id,
-            Transaction.date >= year_start,
-            Transaction.date <= year_end,
             (Transaction.id.in_(root_ids)) | (Transaction.parent_transaction_id.in_(root_ids)),
         )
         .all()
@@ -64,13 +66,15 @@ def auto_generate_lines(forecast: Forecast, db: Session) -> None:
         ))
 
 
-def project_forecast(forecast_id: str, db: Session) -> dict:
+def project_forecast(forecast_id: str, user_id: str, db: Session) -> dict:
     """
     Compute month-by-month projection for all lines.
     Projection period: base_year+1 through base_year+projection_years.
     effective_amount(line, month) = highest valid_from adjustment <= month, else base_amount.
     """
-    forecast = db.query(Forecast).filter_by(id=forecast_id).first()
+    forecast = db.query(Forecast).filter(
+        Forecast.id == forecast_id, Forecast.user_id == user_id
+    ).first()
     if not forecast:
         return {}
 

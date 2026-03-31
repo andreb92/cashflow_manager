@@ -170,6 +170,71 @@ def test_delete_transfer_cascade_all(client):
     assert len(remaining) == 0
 
 
+def test_update_transfer_date_does_not_cascade_to_siblings(client):
+    """CRIT-1 + CRIT-2: updating a date on one installment must not change sibling dates,
+    and billing_month must be recomputed correctly for every row from its own date."""
+    _setup(client)
+    # Create a 3-month recurring transfer starting 2026-01-10
+    first_id = client.post("/api/v1/transfers", json={
+        "date": "2026-01-10", "amount": 300, "detail": "Recurring",
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+        "recurrence_months": 3,
+    }).json()["id"]
+    all_transfers = client.get("/api/v1/transfers").json()
+
+    # Identify the three rows by their month
+    def row_for_month(prefix):
+        return next(t for t in all_transfers if t["date"].startswith(prefix))
+
+    jan = row_for_month("2026-01")
+    feb = row_for_month("2026-02")
+    mar = row_for_month("2026-03")
+
+    # Update only the January row's date (cascade=single)
+    r = client.put(f"/api/v1/transfers/{jan['id']}", json={"date": "2026-01-20"}, params={"cascade": "single"})
+    assert r.status_code == 200
+
+    # Re-fetch all three rows
+    jan_updated = client.get(f"/api/v1/transfers/{jan['id']}").json()
+    feb_updated = client.get(f"/api/v1/transfers/{feb['id']}").json()
+    mar_updated = client.get(f"/api/v1/transfers/{mar['id']}").json()
+
+    # CRIT-1: siblings must keep their own original dates
+    assert jan_updated["date"] == "2026-01-20", "target row date should be updated"
+    assert feb_updated["date"] == "2026-02-10", "sibling date must not change"
+    assert mar_updated["date"] == "2026-03-10", "sibling date must not change"
+
+    # CRIT-2: billing_month must reflect each row's own date
+    assert jan_updated["billing_month"] == "2026-01-01"
+    assert feb_updated["billing_month"] == "2026-02-01"
+    assert mar_updated["billing_month"] == "2026-03-01"
+
+
+def test_cascade_all_recomputes_billing_month_per_row(client):
+    """CRIT-2 (cascade=all): all rows get billing_month recomputed from their own date."""
+    _setup(client)
+    first_id = client.post("/api/v1/transfers", json={
+        "date": "2026-04-05", "amount": 100, "detail": "Multi",
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+        "recurrence_months": 3,
+    }).json()["id"]
+    all_transfers = client.get("/api/v1/transfers").json()
+    any_id = all_transfers[0]["id"]
+
+    # Update amount on all rows — this must not corrupt billing_month
+    r = client.put(f"/api/v1/transfers/{any_id}", json={"amount": 150.0}, params={"cascade": "all"})
+    assert r.status_code == 200
+
+    refreshed = client.get("/api/v1/transfers").json()
+    for t in refreshed:
+        expected_bm = t["date"][:7] + "-01"
+        assert t["billing_month"] == expected_bm, (
+            f"billing_month {t['billing_month']!r} does not match date {t['date']!r}"
+        )
+
+
 def test_delete_transfer_cascade_future(client):
     _setup(client)
     first_id = client.post("/api/v1/transfers", json={

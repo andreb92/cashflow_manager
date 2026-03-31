@@ -32,6 +32,12 @@ Returns `200` with `access_token` cookie. Returns `401` on invalid credentials.
 
 Stored as bcrypt hashes. Never stored or logged in plaintext.
 
+### Current user
+
+`GET /api/v1/auth/me` — returns the currently authenticated user.
+
+Response includes `has_password` and `has_oidc` fields (see [UserOut fields](#userout-fields) below).
+
 ### Disabling
 
 Setting `BASIC_AUTH_ENABLED=false` disables the `/register` and `/login` endpoints. Existing basic-auth users who also have an OIDC account (same email) can still log in via OIDC. Existing basic-auth-only users cannot log in until the setting is re-enabled.
@@ -98,6 +104,33 @@ If the OIDC provider does not include an email claim, merging is not possible an
 - Expiry configured via `JWT_EXPIRE_DAYS` (default: 30 days)
 - No refresh token — on expiry the user re-authenticates
 - All authenticated endpoints read the cookie automatically; the frontend never handles the token directly
+
+---
+
+## UserOut fields
+
+`UserOut` is returned by `/auth/register`, `/auth/login`, and `/auth/me`. In addition to `id`, `email`, and `name`, it includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `has_password` | `bool` | Whether the user has a password set (i.e., registered via basic auth). |
+| `has_oidc` | `bool` | Whether the user has an OIDC link (`oidc_sub` is set). |
+
+These fields drive frontend behavior — for example, whether to show a password prompt before account deletion.
+
+---
+
+## Account Deletion
+
+`DELETE /api/v1/users/me`
+
+Permanently deletes the authenticated user's account and all associated data.
+
+- **Request body (JSON):** `{"password": "<current_password>"}`
+- Returns `401` if the password is wrong or absent, or if the user has no password set (OIDC-only users)
+- On success: clears the `access_token` and `oidc_id_token` cookies and returns `{"ok": true}`
+
+**OIDC-only users** (no password set) cannot use this endpoint. There is currently no self-service deletion path for users who signed up exclusively via OIDC.
 
 ---
 

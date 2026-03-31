@@ -13,7 +13,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const url: string = error.config?.url ?? '';
-      if (!url.includes('/auth/login') && !url.includes('/auth/me')) {
+      if (!url.includes('/auth/login') && !url.includes('/auth/me') && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }

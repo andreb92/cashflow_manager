@@ -13,6 +13,7 @@ type Fields = Omit<TaxConfig, 'id'>;
 export default function TaxConfigSettings() {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const { data: configs = [], isLoading } = useQuery({
     queryKey: ['tax-config'],
@@ -51,7 +52,7 @@ export default function TaxConfigSettings() {
             <span className="font-medium text-primary">From {cfg.valid_from}</span>
             {cfg.id !== earliest ? (
               <Button variant="ghost" className="text-xs text-red-500"
-                onClick={() => window.confirm('Delete period?') && del(cfg.id)}>
+                onClick={() => setConfirmId(cfg.id)}>
                 Delete
               </Button>
             ) : (
@@ -82,6 +83,14 @@ export default function TaxConfigSettings() {
           </details>
         </div>
       ))}
+
+      <Modal open={!!confirmId} onClose={() => setConfirmId(null)} title="Delete tax config period">
+        <p className="text-sm text-secondary mb-4">Are you sure you want to delete this tax config period? This cannot be undone.</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmId(null)}>Cancel</Button>
+          <Button variant="ghost" className="text-red-500" onClick={() => { del(confirmId!); setConfirmId(null); }}>Confirm Delete</Button>
+        </div>
+      </Modal>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add tax config period">
         <form onSubmit={handleSubmit((d) => create(d))} className="flex flex-col gap-3">

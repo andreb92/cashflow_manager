@@ -187,6 +187,9 @@ async def oidc_logout(
             end_session = endpoints.get("end_session_endpoint")
             if end_session:
                 id_token = _oidc.decrypt_cookie(oidc_id_token, settings.session_encryption_key)
+                if id_token is None:
+                    from fastapi.responses import RedirectResponse
+                    return RedirectResponse(url="/login")
                 logout_url = f"{end_session}?id_token_hint={id_token}&post_logout_redirect_uri=/"
                 from fastapi.responses import RedirectResponse
                 return RedirectResponse(url=logout_url)

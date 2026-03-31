@@ -22,6 +22,7 @@ class PaymentMethod(Base):
     )
     opening_balance: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    has_stamp_duty: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
 
 
 class MainBankHistory(Base):

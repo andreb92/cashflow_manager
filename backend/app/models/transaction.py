@@ -15,8 +15,8 @@ class Transaction(Base):
     date: Mapped[str] = mapped_column(String(10))
     detail: Mapped[str] = mapped_column(String(500))
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
-    payment_method_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("payment_methods.id")
+    payment_method_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True
     )
     category_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("categories.id"), nullable=True

@@ -95,9 +95,16 @@ def update_transfer(
         ).filter_by(user_id=current_user.id).all()
     else:
         rows = [t]
+    # Split fields: date must only apply to the target row, not siblings
+    cascade_fields = {k: v for k, v in req.model_dump(exclude_none=True).items() if k != "date"}
+    target_fields = req.model_dump(exclude_none=True)
+
     for row in rows:
-        for field, val in req.model_dump(exclude_none=True).items():
+        fields = target_fields if row.id == transfer_id else cascade_fields
+        for field, val in fields.items():
             setattr(row, field, val)
+        # Recompute billing_month — transfers always bill the current month (no credit-card shift)
+        row.billing_month = str(parse_date(row.date).date().replace(day=1))
     db.commit()
     db.refresh(t)
     return t

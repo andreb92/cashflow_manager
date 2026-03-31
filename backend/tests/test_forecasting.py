@@ -282,3 +282,69 @@ def test_forecast_detail_bulk_loads_adjustments(client):
         if line["id"] in line_ids:
             assert len(line["adjustments"]) == 1, \
                 f"Line {line['id']} missing adjustment"
+
+
+# ---------------------------------------------------------------------------
+# H-4: project_forecast must respect user_id — another user cannot trigger it
+# ---------------------------------------------------------------------------
+def test_project_forecast_wrong_user_returns_404(client):
+    """Projection endpoint must 404 when the forecast belongs to a different user."""
+    from tests.test_onboarding import WIZARD_PAYLOAD
+
+    # Alice creates a forecast
+    client.post("/api/v1/auth/register", json={
+        "email": "alice_h4@test.com", "password": "Password1!", "name": "Alice"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    fc_id = client.post("/api/v1/forecasts", json={
+        "name": "Alice plan", "base_year": 2026, "projection_years": 1
+    }).json()["id"]
+
+    # Bob registers and logs in (cookie is now Bob's session)
+    client.post("/api/v1/auth/register", json={
+        "email": "bob_h4@test.com", "password": "Password1!", "name": "Bob"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+
+    # Bob tries to access Alice's projection — must get 404
+    r = client.get(f"/api/v1/forecasts/{fc_id}/projection")
+    assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# H-5: updating a forecast name to empty string must be accepted
+# ---------------------------------------------------------------------------
+def test_update_forecast_name_to_empty_string(client):
+    """Setting name='' is a valid update and must not be silently skipped."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={
+        "name": "Original Name", "base_year": 2026, "projection_years": 1
+    }).json()["id"]
+
+    r = client.put(f"/api/v1/forecasts/{fc_id}", json={"name": ""})
+    assert r.status_code == 200
+    assert r.json()["name"] == ""
+
+
+# ---------------------------------------------------------------------------
+# H-6: add_line response must contain the expected dict fields
+# ---------------------------------------------------------------------------
+def test_add_line_response_has_expected_fields(client):
+    """add_line must return a dict with the same fields as _forecast_detail line entries."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={
+        "name": "Plan", "base_year": 2026, "projection_years": 1
+    }).json()["id"]
+
+    r = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "New line", "base_amount": 123.45, "billing_day": 10,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    for field in ("id", "detail", "base_amount", "billing_day", "category_id",
+                  "payment_method_id", "notes", "adjustments"):
+        assert field in body, f"Missing field: {field}"
+    assert body["detail"] == "New line"
+    assert body["base_amount"] == pytest.approx(123.45)
+    assert body["billing_day"] == 10
+    assert body["adjustments"] == []

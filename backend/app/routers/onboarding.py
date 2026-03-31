@@ -5,6 +5,8 @@ from app.models.user import User, UserSetting
 from app.models.payment_method import PaymentMethod, MainBankHistory
 from app.models.category import Category
 from app.models.salary import SalaryConfig
+from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 from app.schemas.onboarding import OnboardingPayload
 from app.services.seed import DEFAULT_CATEGORIES
 from app.services.salary import calculate_salary
@@ -39,6 +41,8 @@ def submit_onboarding(
 ):
     # Idempotent — wipe and recreate per-user setup data
     # Delete FK children before parents: MainBankHistory.payment_method_id → payment_methods.id
+    db.query(Transaction).filter(Transaction.user_id == current_user.id).delete()
+    db.query(Transfer).filter(Transfer.user_id == current_user.id).delete()
     db.query(MainBankHistory).filter_by(user_id=current_user.id).delete()
     db.query(PaymentMethod).filter_by(user_id=current_user.id).delete()
     db.query(Category).filter_by(user_id=current_user.id).delete()

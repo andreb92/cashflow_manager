@@ -1,7 +1,7 @@
 
 def _make_user_and_login(client):
-    client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "pass123", "name": "U"})
-    client.post("/api/v1/auth/login", json={"email": "u@x.com", "password": "pass123"})
+    client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "Password1!", "name": "U"})
+    client.post("/api/v1/auth/login", json={"email": "u@x.com", "password": "Password1!"})
 
 
 def test_create_salary_with_salary_months_13(client):

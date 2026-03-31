@@ -10,10 +10,10 @@ export default function AccountSettings() {
   const { user, logout } = useAuth();
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState('');
+  const [password, setPassword] = useState('');
 
   const { mutate: deleteAccount, isPending, error: deleteError } = useMutation({
-    mutationFn: () => authApi.deleteMe(),
+    mutationFn: () => authApi.deleteMe(password),
     onSuccess: () => {
       // Don't call logout() — the backend already cleared the JWT cookie.
       // Calling authApi.logout() would hit a dead session.
@@ -45,7 +45,7 @@ export default function AccountSettings() {
 
       <Modal
         open={deleteOpen}
-        onClose={() => { setDeleteOpen(false); setConfirmText(''); }}
+        onClose={() => { setDeleteOpen(false); setPassword(''); }}
         title="Delete account"
       >
         <div className="flex flex-col gap-4">
@@ -54,11 +54,11 @@ export default function AccountSettings() {
             <p>All your data will be permanently deleted: transactions, transfers, salary configs, assets, forecasts, and your account.</p>
           </div>
           <Input
-            label='Type DELETE to confirm'
-            type="text"
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
-            placeholder="DELETE"
+            label="Enter your password to confirm"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
           />
           {deleteError && (
             <p className="text-xs text-red-600">Failed to delete account. Please try again.</p>
@@ -66,7 +66,7 @@ export default function AccountSettings() {
           <Button
             isLoading={isPending}
             className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-            disabled={confirmText !== 'DELETE' || isPending}
+            disabled={!password || isPending}
             onClick={() => deleteAccount()}
           >
             Permanently delete account

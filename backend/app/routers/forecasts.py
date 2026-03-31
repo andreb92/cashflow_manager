@@ -101,7 +101,7 @@ def update_forecast(fc_id: str, req: ForecastUpdate, current_user: User = Depend
     fc = db.query(Forecast).filter_by(id=fc_id, user_id=current_user.id).first()
     if not fc:
         raise HTTPException(404, "Not found")
-    if req.name:
+    if req.name is not None:
         fc.name = req.name
     if req.projection_years is not None:
         new_end = f"{fc.base_year + req.projection_years:04d}-12-01"
@@ -131,7 +131,7 @@ def get_projection(fc_id: str, current_user: User = Depends(get_current_user), d
     fc = db.query(Forecast).filter_by(id=fc_id, user_id=current_user.id).first()
     if not fc:
         raise HTTPException(404, "Not found")
-    return project_forecast(fc_id, db)
+    return project_forecast(fc_id, current_user.id, db)
 
 
 @router.post("/{fc_id}/lines")
@@ -143,7 +143,12 @@ def add_line(fc_id: str, req: ForecastLineCreate, current_user: User = Depends(g
     db.add(line)
     db.commit()
     db.refresh(line)
-    return line
+    return {
+        "id": line.id, "detail": line.detail, "category_id": line.category_id,
+        "base_amount": float(line.base_amount), "billing_day": line.billing_day,
+        "payment_method_id": line.payment_method_id, "notes": line.notes,
+        "adjustments": [],
+    }
 
 
 @router.put("/{fc_id}/lines/{line_id}")

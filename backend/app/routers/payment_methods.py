@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -89,7 +89,7 @@ def set_main_bank(pm_id: str, req: SetMainBankRequest, current_user: User = Depe
     if old_main:
         old_main.is_main_bank = False
     new_main.is_main_bank = True
-    today_first = date.today().replace(day=1)
+    today_first = datetime.now(timezone.utc).date().replace(day=1)
     db.add(MainBankHistory(
         user_id=current_user.id, payment_method_id=pm_id,
         valid_from=today_first.isoformat(), opening_balance=req.opening_balance,

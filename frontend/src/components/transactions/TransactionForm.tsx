@@ -74,6 +74,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
       ? {
           ...initial,
           amount: String(initial.amount),
+          category_id: initial.category_id ?? '',
           recurrence_months: String(initial.recurrence_months ?? ''),
           installment_total: String(initial.installment_total ?? ''),
           notes: initial.notes ?? '',

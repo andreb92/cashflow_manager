@@ -37,3 +37,31 @@ test('SummaryPage shows year selector', async () => {
   render(<SummaryPage />, { wrapper });
   await waitFor(() => expect(screen.getByRole('spinbutton')).toBeInTheDocument());
 });
+
+test('SummaryPage renders without crashing', async () => {
+  render(<SummaryPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText(/monthly summary/i)).toBeInTheDocument());
+});
+
+test('SummaryPage shows stamp_duty in monthly row', async () => {
+  server.use(
+    http.get(`/api/v1/summary/${year}`, () =>
+      HttpResponse.json(
+        Array.from({ length: 12 }, (_, i) => ({
+          year, month: i + 1,
+          incomes: 3000,
+          outcomes_by_method: { Visa: 500 },
+          transfers_out_bank: 100,
+          transfers_in_bank: 0,
+          bank_balance: 5000 + i * 100,
+          stamp_duty: i === 0 ? 2 : 0,
+        }))
+      )
+    )
+  );
+  render(<SummaryPage />, { wrapper });
+  // The Stamp duty row label is rendered
+  await waitFor(() => expect(screen.getByText('Stamp duty')).toBeInTheDocument());
+  // The value "2,00" appears in the stamp duty row (Italian format: 2 → "2,00")
+  expect(screen.getByText('2,00')).toBeInTheDocument();
+});

@@ -14,12 +14,14 @@ type CreateFormValues = {
   type: PaymentMethod['type'] | '';
   opening_balance: string;
   linked_bank_id: string;
+  has_stamp_duty: boolean;
 };
 
 const TYPE_OPTIONS: { value: PaymentMethod['type']; label: string }[] = [
   { value: 'bank', label: 'Bank' },
   { value: 'debit_card', label: 'Debit card' },
   { value: 'credit_card', label: 'Credit card' },
+  { value: 'revolving', label: 'Revolving' },
   { value: 'prepaid', label: 'Prepaid' },
   { value: 'cash', label: 'Cash' },
 ];
@@ -34,6 +36,7 @@ export default function PaymentMethodsSettings() {
   const [editMethod, setEditMethod] = useState<PaymentMethod | null>(null);
   const [editName, setEditName] = useState('');
   const [editLinkedBankId, setEditLinkedBankId] = useState('');
+  const [editHasStampDuty, setEditHasStampDuty] = useState(false);
 
   const { data: methods = [], isLoading } = useQuery({
     queryKey: ['payment-methods-all'],
@@ -51,8 +54,8 @@ export default function PaymentMethodsSettings() {
   });
 
   const { mutate: editMutate, isPending: editing } = useMutation({
-    mutationFn: ({ id, name, linked_bank_id }: { id: string; name: string; linked_bank_id: string | null }) =>
-      paymentMethodsApi.update(id, { name, linked_bank_id: linked_bank_id || null }),
+    mutationFn: ({ id, name, linked_bank_id, has_stamp_duty }: { id: string; name: string; linked_bank_id: string | null; has_stamp_duty?: boolean }) =>
+      paymentMethodsApi.update(id, { name, linked_bank_id: linked_bank_id || null, has_stamp_duty }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-methods-all'] });
       qc.invalidateQueries({ queryKey: ['payment-methods'] });
@@ -78,11 +81,12 @@ export default function PaymentMethodsSettings() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
-    defaultValues: { name: '', type: 'debit_card', opening_balance: '', linked_bank_id: '' },
+    defaultValues: { name: '', type: 'debit_card', opening_balance: '', linked_bank_id: '', has_stamp_duty: false },
   });
 
   const selectedType = watch('type');
   const isBank = selectedType === 'bank';
+  const isCreditCard = selectedType === 'credit_card';
   const isLinkable = LINKABLE_TYPES.includes(selectedType as PaymentMethod['type']);
   const bankMethods = methods.filter((m) => m.type === 'bank' && m.is_active);
 
@@ -105,6 +109,7 @@ export default function PaymentMethodsSettings() {
       is_active: true,
       linked_bank_id: isLinkable && values.linked_bank_id ? values.linked_bank_id : null,
       opening_balance: isBank ? parseFloat(values.opening_balance) || 0 : null,
+      has_stamp_duty: isCreditCard ? values.has_stamp_duty : false,
     });
   };
 
@@ -143,6 +148,7 @@ export default function PaymentMethodsSettings() {
                   setEditMethod(m);
                   setEditName(m.name);
                   setEditLinkedBankId(m.linked_bank_id ?? '');
+                  setEditHasStampDuty(m.has_stamp_duty ?? false);
                 }}
               >
                 Edit
@@ -214,6 +220,17 @@ export default function PaymentMethodsSettings() {
             );
           })()}
 
+          {isCreditCard && (
+            <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4"
+                {...register('has_stamp_duty')}
+              />
+              Stamp duty (imposta di bollo)
+            </label>
+          )}
+
           {createMutationError && (
             <p className="text-sm text-red-600 dark:text-red-400">Failed to create. Please try again.</p>
           )}
@@ -266,6 +283,17 @@ export default function PaymentMethodsSettings() {
               onChange={(e) => setEditLinkedBankId(e.target.value)}
             />
           )}
+          {editMethod?.type === 'credit_card' && (
+            <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4"
+                checked={editHasStampDuty}
+                onChange={(e) => setEditHasStampDuty(e.target.checked)}
+              />
+              Stamp duty (imposta di bollo)
+            </label>
+          )}
           <Button
             isLoading={editing}
             disabled={!editName.trim()}
@@ -275,6 +303,7 @@ export default function PaymentMethodsSettings() {
                 id: editMethod.id,
                 name: editName,
                 linked_bank_id: editLinkedBankId || null,
+                has_stamp_duty: editMethod.type === 'credit_card' ? editHasStampDuty : undefined,
               })
             }
           >

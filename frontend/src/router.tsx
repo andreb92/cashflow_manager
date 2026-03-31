@@ -26,12 +26,14 @@ function AuthGuard() {
     queryKey: ['auth', 'me'],
     queryFn: fetchMeOrNull,
     retry: false,
+    staleTime: 30_000,
   });
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['onboarding', 'status'],
     queryFn: onboardingApi.status,
     enabled: !!user,
     retry: false,
+    staleTime: 30_000,
   });
 
   if (isLoading || (user && statusLoading)) return null;
@@ -40,11 +42,34 @@ function AuthGuard() {
   return <Outlet />;
 }
 
+function SetupGuard() {
+  const { data: user, isLoading } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: fetchMeOrNull,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const { data: status, isLoading: statusLoading } = useQuery({
+    queryKey: ['onboarding', 'status'],
+    queryFn: onboardingApi.status,
+    enabled: !!user,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  if (isLoading || (user && statusLoading)) return null;
+  if (user && status?.complete) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 export function createRouter() {
   return createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
-  { path: '/setup', element: <SetupPage /> },
+  {
+    element: <SetupGuard />,
+    children: [{ path: '/setup', element: <SetupPage /> }],
+  },
   {
     element: <AuthGuard />,
     children: [
