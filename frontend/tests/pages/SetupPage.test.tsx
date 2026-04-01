@@ -90,12 +90,6 @@ function TestSetupGuard() {
   return <Outlet />;
 }
 
-function guardWrapper({ children: _children }: { children: React.ReactNode }) {
-  // We build the route tree ourselves here so this wrapper is unused,
-  // but the render helper still expects it.
-  return <>{_children}</>;
-}
-
 test('SetupGuard redirects to "/" when onboarding is already complete', async () => {
   // Override the default handler so onboarding is complete
   server.use(
