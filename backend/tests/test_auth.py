@@ -196,6 +196,131 @@ def test_register_with_basic_auth_disabled_returns_403(client):
         get_settings.cache_clear()
 
 
+# --- Group 4: unauthenticated 401 ---
+
+def test_unauthenticated_transactions_returns_401():
+    """GET /transactions without a session cookie must return 401."""
+    import os
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.main import app
+    from app.database import Base
+    from app.deps import get_db
+    from app.config import get_settings
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = override
+    try:
+        with TestClient(app, raise_server_exceptions=True) as anon:
+            anon.cookies.clear()
+            r = anon.get("/api/v1/transactions")
+            assert r.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        os.environ.pop("DEVELOPMENT_MODE", None)
+        get_settings.cache_clear()
+
+
+def test_unauthenticated_forecasts_returns_401():
+    """GET /forecasts without a session cookie must return 401."""
+    import os
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.main import app
+    from app.database import Base
+    from app.deps import get_db
+    from app.config import get_settings
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = override
+    try:
+        with TestClient(app, raise_server_exceptions=True) as anon:
+            anon.cookies.clear()
+            r = anon.get("/api/v1/forecasts")
+            assert r.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        os.environ.pop("DEVELOPMENT_MODE", None)
+        get_settings.cache_clear()
+
+
+def test_unauthenticated_payment_methods_returns_401():
+    """GET /payment-methods without a session cookie must return 401."""
+    import os
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.main import app
+    from app.database import Base
+    from app.deps import get_db
+    from app.config import get_settings
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = override
+    try:
+        with TestClient(app, raise_server_exceptions=True) as anon:
+            anon.cookies.clear()
+            r = anon.get("/api/v1/payment-methods")
+            assert r.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        os.environ.pop("DEVELOPMENT_MODE", None)
+        get_settings.cache_clear()
+
+
 def test_oidc_logout_with_valid_id_token_cookie_redirects_with_hint(client):
     """oidc_logout with a valid encrypted oidc_id_token cookie must redirect
     to the end_session_endpoint with id_token_hint in the URL."""

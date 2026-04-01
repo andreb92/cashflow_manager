@@ -26,6 +26,27 @@ beforeEach(() => {
   );
 });
 
+test('AssetsPage renders heading', async () => {
+  render(<AssetsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Assets')).toBeInTheDocument());
+});
+
+test('AssetsPage shows asset names and values', async () => {
+  render(<AssetsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('EmergencyFund')).toBeInTheDocument());
+  expect(screen.getByText('AXA')).toBeInTheDocument();
+  // Computed amount for EmergencyFund: 8.000,00 (Italian locale) — may appear in multiple columns
+  expect(screen.getAllByText(/8\.000/).length).toBeGreaterThan(0);
+});
+
+test('AssetsPage shows override value when present', async () => {
+  render(<AssetsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('AXA')).toBeInTheDocument());
+  // AXA has manual_override: 3500, displayed as "3.500,00 (manual)"
+  expect(screen.getAllByText(/3\.500/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/manual/i).length).toBeGreaterThan(0);
+});
+
 test('AssetsPage lists assets with computed and override amounts', async () => {
   render(<AssetsPage />, { wrapper });
   await waitFor(() => expect(screen.getByText('EmergencyFund')).toBeInTheDocument());

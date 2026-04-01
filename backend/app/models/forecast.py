@@ -54,3 +54,4 @@ class ForecastAdjustment(Base):
     )
     valid_from: Mapped[str] = mapped_column(String(10))
     new_amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    adjustment_type: Mapped[str] = mapped_column(String(20), default="fixed", server_default="fixed")

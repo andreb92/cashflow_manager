@@ -17,22 +17,39 @@ beforeEach(() => {
   server.use(
     http.get('/api/v1/salary', () =>
       HttpResponse.json([{
-        id: 'sc1', user_id: 'u1', valid_from: '2026-01-01', ral: 42000,
+        id: 'sc1', user_id: 'u1', valid_from: '2026-01-01', ral: 4000,
         employer_contrib_rate: 0.04, voluntary_contrib_rate: 0, regional_tax_rate: 0.0173,
-        municipal_tax_rate: 0.001, meal_vouchers_annual: 1320, welfare_annual: 500,
-        manual_net_override: null, computed_net_monthly: 2600,
+        municipal_tax_rate: 0.001, meal_vouchers_annual: 0, welfare_annual: 0,
+        salary_months: 12, manual_net_override: null, computed_net_monthly: 2600,
       }])
     ),
     http.get('/api/v1/salary/calculate', () =>
       HttpResponse.json({
-        gross_annual: 42000, social_security: 3860, pension_deductible: 1680, taxable_base: 36460,
-        income_tax_gross: 8846, employment_deduction: 1450, income_tax_net: 7396,
-        regional_surtax: 630, municipal_surtax: 36,
-        net_annual: 29518, net_monthly: 2459.83,
-        meal_vouchers_monthly: 110, welfare_monthly: 41.67,
+        gross_annual: 4000, social_security: 367, pension_deductible: 160, taxable_base: 3473,
+        income_tax_gross: 841, employment_deduction: 1450, income_tax_net: 0,
+        regional_surtax: 60, municipal_surtax: 3,
+        net_annual: 3570, net_monthly: 297.5,
+        meal_vouchers_monthly: 0, welfare_monthly: 0,
       })
-    )
+    ),
+    http.get('/api/v1/tax-config', () => HttpResponse.json([]))
   );
+});
+
+test('SalaryPage renders page content', async () => {
+  render(<SalaryPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Salary Config')).toBeInTheDocument());
+});
+
+test('SalaryPage shows salary entry with gross salary value', async () => {
+  render(<SalaryPage />, { wrapper });
+  // RAL 4000 shown in the period card as "RAL €4.000,00" (Italian locale)
+  await waitFor(() => expect(screen.getByText(/4\.000/)).toBeInTheDocument());
+});
+
+test('SalaryPage has add period button', async () => {
+  render(<SalaryPage />, { wrapper });
+  await waitFor(() => expect(screen.getByRole('button', { name: /add period/i })).toBeInTheDocument());
 });
 
 test('SalaryPage shows salary config period', async () => {

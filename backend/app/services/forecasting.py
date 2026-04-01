@@ -110,7 +110,12 @@ def project_forecast(forecast_id: str, user_id: str, db: Session) -> dict:
                 # Find applicable adjustment
                 applicable = [a for a in adjs if a.valid_from <= month_first]
                 if applicable:
-                    effective = float(max(applicable, key=lambda a: a.valid_from).new_amount)
+                    adj = max(applicable, key=lambda a: a.valid_from)
+                    adj_type = getattr(adj, "adjustment_type", "fixed") or "fixed"
+                    if adj_type == "percentage":
+                        effective = float(line.base_amount) * (1 + float(adj.new_amount) / 100)
+                    else:
+                        effective = float(adj.new_amount)
                 else:
                     effective = float(line.base_amount)
                 months_data.append({"month": month_str, "effective_amount": effective})
@@ -123,7 +128,10 @@ def project_forecast(forecast_id: str, user_id: str, db: Session) -> dict:
             "base_amount": float(line.base_amount),
             "billing_day": line.billing_day,
             "adjustments": [
-                {"id": a.id, "valid_from": a.valid_from[:7], "new_amount": float(a.new_amount)}
+                {
+                    "id": a.id, "valid_from": a.valid_from[:7], "new_amount": float(a.new_amount),
+                    "adjustment_type": getattr(a, "adjustment_type", "fixed") or "fixed",
+                }
                 for a in adjs
             ],
             "months": months_data,

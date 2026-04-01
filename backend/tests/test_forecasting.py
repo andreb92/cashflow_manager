@@ -348,3 +348,60 @@ def test_add_line_response_has_expected_fields(client):
     assert body["base_amount"] == pytest.approx(123.45)
     assert body["billing_day"] == 10
     assert body["adjustments"] == []
+
+
+# --- Group 3: percentage adjustments ---
+
+def _make_forecast_with_line(client, base_amount: float, projection_years: int = 1) -> tuple[str, str]:
+    """Create a forecast with a single manual line; return (fc_id, line_id)."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={
+        "name": "PctTest", "base_year": 2026, "projection_years": projection_years,
+    }).json()["id"]
+    line_id = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "PctLine", "base_amount": base_amount,
+    }).json()["id"]
+    return fc_id, line_id
+
+
+def test_percentage_adjustment_positive(client):
+    """A 10% adjustment on base_amount=1000 must yield effective_amount=1100.0 in the projection."""
+    fc_id, line_id = _make_forecast_with_line(client, base_amount=1000.0)
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-01-01", "new_amount": 10.0, "adjustment_type": "percentage",
+    })
+    proj = client.get(f"/api/v1/forecasts/{fc_id}/projection").json()
+    pct_line = next(l for l in proj["lines"] if l["detail"] == "PctLine")
+    # All months from 2027-01 onward should show 1100
+    for m in pct_line["months"]:
+        assert m["effective_amount"] == pytest.approx(1100.0), (
+            f"Expected 1100.0 for month {m['month']}, got {m['effective_amount']}"
+        )
+
+
+def test_percentage_adjustment_zero_percent(client):
+    """A 0% adjustment on base_amount=1000 must leave effective_amount unchanged at 1000.0."""
+    fc_id, line_id = _make_forecast_with_line(client, base_amount=1000.0)
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-01-01", "new_amount": 0.0, "adjustment_type": "percentage",
+    })
+    proj = client.get(f"/api/v1/forecasts/{fc_id}/projection").json()
+    pct_line = next(l for l in proj["lines"] if l["detail"] == "PctLine")
+    for m in pct_line["months"]:
+        assert m["effective_amount"] == pytest.approx(1000.0), (
+            f"Expected 1000.0 for month {m['month']}, got {m['effective_amount']}"
+        )
+
+
+def test_percentage_adjustment_negative_percent(client):
+    """A -20% adjustment on base_amount=1000 must yield effective_amount=800.0."""
+    fc_id, line_id = _make_forecast_with_line(client, base_amount=1000.0)
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-01-01", "new_amount": -20.0, "adjustment_type": "percentage",
+    })
+    proj = client.get(f"/api/v1/forecasts/{fc_id}/projection").json()
+    pct_line = next(l for l in proj["lines"] if l["detail"] == "PctLine")
+    for m in pct_line["months"]:
+        assert m["effective_amount"] == pytest.approx(800.0), (
+            f"Expected 800.0 for month {m['month']}, got {m['effective_amount']}"
+        )

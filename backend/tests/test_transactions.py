@@ -463,3 +463,93 @@ def test_transaction_list_order_is_stable(client):
     r1 = client.get("/api/v1/transactions").json()
     r2 = client.get("/api/v1/transactions").json()
     assert [t["id"] for t in r1] == [t["id"] for t in r2], "Order is not stable"
+
+
+# --- Group 1 new tests ---
+
+def test_list_filtered_by_date_month(client):
+    """date_month=YYYY-MM returns only transactions whose date falls in that month."""
+    pm_id, cat_id = _setup(client)
+    client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "March tx", "amount": 100,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    })
+    client.post("/api/v1/transactions", json={
+        "date": "2026-04-05", "detail": "April tx", "amount": 200,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    })
+    r = client.get("/api/v1/transactions", params={"date_month": "2026-03"})
+    details = [t["detail"] for t in r.json()]
+    assert "March tx" in details
+    assert "April tx" not in details
+
+
+def test_list_limit_and_offset(client):
+    """limit and offset work correctly for pagination."""
+    pm_id, cat_id = _setup(client)
+    for i in range(1, 4):
+        client.post("/api/v1/transactions", json={
+            "date": f"2026-03-{i:02d}", "detail": f"tx{i}", "amount": i * 10,
+            "payment_method_id": pm_id, "category_id": cat_id,
+            "transaction_direction": "debit",
+        })
+    # limit=2 returns at most 2 rows
+    r_limit = client.get("/api/v1/transactions", params={"limit": 2})
+    assert len(r_limit.json()) == 2
+
+    # offset=2 with a large limit returns the remaining 1 row
+    r_offset = client.get("/api/v1/transactions", params={"offset": 2, "limit": 10})
+    assert len(r_offset.json()) == 1
+
+
+def test_update_transaction_plain_single(client):
+    """PUT with cascade=single updates only the target transaction's amount."""
+    pm_id, cat_id = _setup(client)
+    tx = client.post("/api/v1/transactions", json={
+        "date": "2026-03-15", "detail": "SingleUpdate", "amount": 50,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    }).json()
+    tx_id = tx["id"]
+    r = client.put(f"/api/v1/transactions/{tx_id}", json={"amount": 75}, params={"cascade": "single"})
+    assert r.status_code == 200
+    updated = r.json()
+    assert float(updated["amount"]) == pytest.approx(75.0)
+    # Other fields unchanged
+    assert updated["detail"] == "SingleUpdate"
+    assert updated["payment_method_id"] == pm_id
+
+
+def test_delete_cascade_single_preserves_siblings(client):
+    """Deleting the middle installment with cascade=single keeps the other 2 siblings."""
+    pm_id, cat_id = _setup(client)
+    # Create a revolving PM to support installments
+    rev_id = client.post("/api/v1/payment-methods", json={"name": "RevCard", "type": "revolving"}).json()["id"]
+    parent = client.post("/api/v1/transactions", json={
+        "date": "2026-03-01", "detail": "Sofa3", "amount": 300,
+        "payment_method_id": rev_id, "category_id": cat_id,
+        "transaction_direction": "debit", "installment_total": 3,
+    }).json()
+    parent_id = parent["id"]
+
+    # Fetch all 3 (parent + 2 children) sorted by billing_month
+    all_sofa = sorted(
+        [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sofa3"],
+        key=lambda t: t["billing_month"],
+    )
+    assert len(all_sofa) == 3
+
+    # Delete the middle one (index 1)
+    middle_id = all_sofa[1]["id"]
+    r = client.delete(f"/api/v1/transactions/{middle_id}", params={"cascade": "single"})
+    assert r.status_code == 200
+
+    # The other two must still exist
+    remaining = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sofa3"]
+    remaining_ids = {t["id"] for t in remaining}
+    assert len(remaining) == 2
+    assert all_sofa[0]["id"] in remaining_ids
+    assert all_sofa[2]["id"] in remaining_ids
+    assert middle_id not in remaining_ids

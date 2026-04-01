@@ -96,3 +96,67 @@ def test_bank_balance_with_main_bank_change(_standalone_db, make_user):
     # Balance in April uses BankB (2000 opening)
     bal_apr = compute_bank_balance(user.id, 2026, 4, db)
     assert bal_apr == 2000.0
+
+
+def test_compute_bank_balances_for_year_mid_year_switch(_standalone_db, make_user):
+    """compute_bank_balances_for_year uses PM1 for Jan-Jun and PM2 from Jul when main bank changes mid-year."""
+    from app.services.bank_balance import compute_bank_balances_for_year
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="mid_year_switch@test.com")
+    db = _standalone_db
+
+    pm1 = PaymentMethod(user_id=user.id, name="BankJan", type="bank", is_main_bank=False)
+    pm2 = PaymentMethod(user_id=user.id, name="BankJul", type="bank", is_main_bank=True)
+    db.add_all([pm1, pm2])
+    db.flush()
+
+    # tracking starts Jan 2026
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+
+    # PM1 is main from Jan 2026 (opening 1000), PM2 from Jul 2026 (opening 5000)
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm1.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm2.id,
+        valid_from="2026-07-01", opening_balance=5000,
+    ))
+
+    # Add a category so transactions are valid
+    cat = Category(user_id=user.id, type="Salary", sub_type="Base")
+    db.add(cat)
+    db.flush()
+
+    # Income on PM1 in February (should be counted toward PM1 balance)
+    db.add(Transaction(
+        user_id=user.id, date="2026-02-15", detail="Feb Income",
+        amount=500, payment_method_id=pm1.id, category_id=cat.id,
+        transaction_direction="income", billing_month="2026-02-01",
+    ))
+    # Income on PM2 in August (should be counted toward PM2 balance)
+    db.add(Transaction(
+        user_id=user.id, date="2026-08-15", detail="Aug Income",
+        amount=200, payment_method_id=pm2.id, category_id=cat.id,
+        transaction_direction="income", billing_month="2026-08-01",
+    ))
+    db.commit()
+
+    result = compute_bank_balances_for_year(user.id, 2026, db)
+
+    # Jan: PM1 opens at 1000, no transactions → 1000
+    assert result[1] == pytest.approx(1000.0)
+    # Feb: PM1 + 500 income → 1500
+    assert result[2] == pytest.approx(1500.0)
+    # Jun: still PM1, no more transactions → 1500
+    assert result[6] == pytest.approx(1500.0)
+    # Jul: PM2 opens at 5000, resets balance → 5000
+    assert result[7] == pytest.approx(5000.0)
+    # Aug: PM2 + 200 income → 5200
+    assert result[8] == pytest.approx(5200.0)
+    # Dec: no more transactions → 5200
+    assert result[12] == pytest.approx(5200.0)

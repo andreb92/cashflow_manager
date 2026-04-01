@@ -33,6 +33,7 @@ class ForecastLineCreate(BaseModel):
 class AdjustmentCreate(BaseModel):
     valid_from: str    # YYYY-MM-DD
     new_amount: float
+    adjustment_type: str = "fixed"  # "fixed" or "percentage"
 
 
 def _forecast_detail(forecast: Forecast, db: Session) -> dict:
@@ -57,7 +58,10 @@ def _forecast_detail(forecast: Forecast, db: Session) -> dict:
             "base_amount": float(line.base_amount), "billing_day": line.billing_day,
             "payment_method_id": line.payment_method_id, "notes": line.notes,
             "adjustments": [
-                {"id": a.id, "valid_from": a.valid_from, "new_amount": float(a.new_amount)}
+                {
+                    "id": a.id, "valid_from": a.valid_from, "new_amount": float(a.new_amount),
+                    "adjustment_type": getattr(a, "adjustment_type", "fixed") or "fixed",
+                }
                 for a in adjs
             ],
         })
@@ -192,6 +196,7 @@ def add_adjustment(
     adj = ForecastAdjustment(
         forecast_line_id=line_id, user_id=current_user.id,
         valid_from=req.valid_from, new_amount=req.new_amount,
+        adjustment_type=req.adjustment_type,
     )
     db.add(adj)
     db.commit()
@@ -209,6 +214,7 @@ def update_adjustment(
         raise HTTPException(404, "Not found")
     adj.valid_from = req.valid_from
     adj.new_amount = req.new_amount
+    adj.adjustment_type = req.adjustment_type
     db.commit()
     db.refresh(adj)
     return adj

@@ -14,25 +14,61 @@ function wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+const mockTransfers = [
+  {
+    id: 'tr1', user_id: 'u1', date: '2026-01-15', detail: 'Savings deposit',
+    amount: 500, from_account_type: 'bank', from_account_name: 'Checking',
+    to_account_type: 'saving', to_account_name: 'Savings',
+    billing_month: '2026-01-01', recurrence_months: null, notes: null,
+    parent_transfer_id: null, created_at: '',
+  },
+  {
+    id: 'tr2', user_id: 'u1', date: '2026-02-10', detail: 'Emergency fund',
+    amount: 200, from_account_type: 'bank', from_account_name: 'Checking',
+    to_account_type: 'saving', to_account_name: 'Savings',
+    billing_month: '2026-02-01', recurrence_months: null, notes: null,
+    parent_transfer_id: null, created_at: '',
+  },
+];
+
 beforeEach(() => {
   server.use(
-    http.get('/api/v1/transfers', () =>
-      HttpResponse.json([{
-        id: 'tr1', user_id: 'u1', date: '2026-03-10', detail: 'Monthly saving',
-        amount: 500, from_account_type: 'bank', from_account_name: 'MyBank',
-        to_account_type: 'saving', to_account_name: 'SavingPot',
-        billing_month: '2026-03-01', recurrence_months: 12, notes: null,
-        parent_transfer_id: null, created_at: '',
-      }])
-    )
+    http.get('/api/v1/transfers', () => HttpResponse.json(mockTransfers)),
+    http.get('/api/v1/payment-methods', () =>
+      HttpResponse.json([
+        { id: 'pm1', name: 'Checking', type: 'bank', is_active: true, is_main_bank: true },
+        { id: 'pm2', name: 'Savings', type: 'bank', is_active: true, is_main_bank: false },
+      ])
+    ),
   );
+});
+
+test('TransfersPage renders heading', async () => {
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Transfers')).toBeInTheDocument());
+});
+
+test('TransfersPage shows transfer list', async () => {
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+  expect(screen.getByText('Emergency fund')).toBeInTheDocument();
 });
 
 test('TransfersPage lists transfers with from/to accounts', async () => {
   render(<TransfersPage />, { wrapper });
-  await waitFor(() => expect(screen.getByText('Monthly saving')).toBeInTheDocument());
-  expect(screen.getByText(/MyBank/)).toBeInTheDocument();
-  expect(screen.getByText(/SavingPot/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+  expect(screen.getAllByText(/Checking/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Savings/).length).toBeGreaterThan(0);
+});
+
+test('TransfersPage delete button opens modal', async () => {
+  const user = userEvent.setup();
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+  const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+  await user.click(deleteButtons[0]);
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByText(/delete this transfer\?/i)).toBeInTheDocument();
 });
 
 test('TransfersPage opens add form', async () => {
