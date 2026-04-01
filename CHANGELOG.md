@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/andreb92/cashflow_manager/compare/v1.2.0...v1.2.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* **frontend:** remove unused guardWrapper in SetupPage test ([48a00a1](https://github.com/andreb92/cashflow_manager/commit/48a00a1c59d829bb9efb49947fd644880cbefcff))
+
 ## [1.1.4](https://github.com/andreb92/cashflow_manager/compare/v1.1.3...v1.1.4) (2026-03-31)
 
 
