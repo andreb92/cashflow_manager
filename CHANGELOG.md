@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/andreb92/cashflow_manager/compare/v1.2.1...v1.2.2) (2026-04-06)
+
+
+### Bug Fixes
+
+* address all code-review issues (2 critical, 5 important, 5 minor) ([#16](https://github.com/andreb92/cashflow_manager/issues/16)) ([fde6c79](https://github.com/andreb92/cashflow_manager/commit/fde6c79d0168a6bad35c727e106eccf2a07c2d26))
+
 ## [1.2.1](https://github.com/andreb92/cashflow_manager/compare/v1.2.0...v1.2.1) (2026-04-01)
 
 
