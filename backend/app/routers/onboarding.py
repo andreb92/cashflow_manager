@@ -101,7 +101,7 @@ def submit_onboarding(
 
     # Salary (optional)
     if payload.salary:
-        tax_cfg = resolve_tax_config(db, payload.tracking_start_date[:7])
+        tax_cfg = resolve_tax_config(db, payload.tracking_start_date[:7], current_user.id)
         breakdown = calculate_salary(payload.salary, tax_cfg) if tax_cfg else None
         db.add(SalaryConfig(
             user_id=current_user.id,

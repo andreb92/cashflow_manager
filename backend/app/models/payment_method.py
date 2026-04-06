@@ -32,7 +32,7 @@ class MainBankHistory(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     payment_method_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("payment_methods.id")
+        String(36), ForeignKey("payment_methods.id", ondelete="CASCADE")
     )
     valid_from: Mapped[str] = mapped_column(String(10))  # YYYY-MM-DD first of month
     opening_balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0)

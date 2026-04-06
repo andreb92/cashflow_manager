@@ -19,7 +19,7 @@ class Transaction(Base):
         String(36), ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True
     )
     category_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("categories.id"), nullable=True
+        String(36), ForeignKey("categories.id", ondelete="RESTRICT"), nullable=True
     )
     transaction_direction: Mapped[str] = mapped_column(String(20))
     billing_month: Mapped[str] = mapped_column(String(10))

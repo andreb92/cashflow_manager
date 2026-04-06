@@ -184,8 +184,8 @@ export default function SalaryPage() {
 
   const selectedConfig = configs.find((c) => c.id === selectedId) ?? configs[configs.length - 1];
 
-  const periodForm = (reg: typeof register, isPending: boolean, onSubmit: (d: PeriodFields) => void, hideDate = false) => (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
+  const periodForm = (reg: typeof register, submitHandler: typeof handleSubmit, isPending: boolean, onSubmit: (d: PeriodFields) => void, hideDate = false) => (
+    <form onSubmit={submitHandler(onSubmit)} className="flex flex-col gap-3">
       {!hideDate && <Input label="Valid from" type="date" {...reg('valid_from', { required: true })} />}
       <Input label="RAL (€)" type="number" step="100" required {...reg('ral', { required: true })} />
       <Input label="Employer pension rate (%)" type="number" step="0.01" required {...reg('employer_contrib_rate_pct', { required: true })} />
@@ -258,31 +258,11 @@ export default function SalaryPage() {
       )}
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add salary period">
-        {periodForm(register, adding, (d) => addPeriod(d))}
+        {periodForm(register, handleSubmit, adding, (d) => addPeriod(d))}
       </Modal>
 
       <Modal open={!!editConfig} onClose={() => setEditConfig(null)} title="Edit salary period">
-        <form onSubmit={handleEditSubmit((d) => updatePeriod(d))} className="flex flex-col gap-3">
-          <Input label="RAL (€)" type="number" step="100" required {...regEdit('ral', { required: true })} />
-          <Input label="Employer pension rate (%)" type="number" step="0.01" required {...regEdit('employer_contrib_rate_pct', { required: true })} />
-          <Input label="Voluntary pension rate (%)" type="number" step="0.01" {...regEdit('voluntary_contrib_rate_pct', { required: true })} />
-          <Input label="Regional tax rate (%)" type="number" step="0.001" required {...regEdit('regional_tax_rate_pct', { required: true })} />
-          <Input label="Municipal tax rate (%)" type="number" step="0.001" required {...regEdit('municipal_tax_rate_pct', { required: true })} />
-          <Input label="Meal vouchers annual (€)" type="number" step="1" {...regEdit('meal_vouchers_annual', { required: true })} />
-          <Input label="Welfare annual (€)" type="number" step="1" {...regEdit('welfare_annual', { required: true })} />
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-secondary">Salary months *</label>
-            <select
-              {...regEdit('salary_months', { required: true })}
-              className="border border-line-strong rounded px-3 py-2 text-sm bg-elevated text-primary"
-            >
-              <option value="12">12 (standard)</option>
-              <option value="13">13 (tredicesima)</option>
-              <option value="14">14 (tredicesima + quattordicesima)</option>
-            </select>
-          </div>
-          <Button type="submit" isLoading={updating}>Save changes</Button>
-        </form>
+        {periodForm(regEdit, handleEditSubmit, updating, (d) => updatePeriod(d), true)}
       </Modal>
     </div>
   );

@@ -241,6 +241,52 @@ def test_assets_list_does_not_expose_other_user_data(client, db):
     )
 
 
+def test_tax_config_does_not_leak_across_users(client):
+    """resolve_tax_config must not return another user's tax config.
+
+    User A creates a tax config row at 2026-07-01 (after the system seed at 2026-01-01)
+    with absurdly high 99% IRPEF rates.  Without the user_id filter, resolve_tax_config
+    picks up A's row when B queries for a salary in July 2026, producing near-zero net.
+    After the fix the fallback is to the system seed row, yielding a realistic net.
+    """
+    # Register user A and create a custom tax config with absurdly high IRPEF rates.
+    # Use valid_from AFTER the system seed date (2026-01-01) so A's row wins the
+    # "most recent valid row" ordering and there is no ambiguity with the system row.
+    client.post("/api/v1/auth/register", json={"email": "a@x.com", "password": "Password1!", "name": "A"})
+    client.post("/api/v1/auth/login", json={"email": "a@x.com", "password": "Password1!"})
+    r_tax = client.post("/api/v1/tax-config", json={
+        "valid_from": "2026-07-01",
+        "irpef_band1_rate": 0.99,
+        "irpef_band2_rate": 0.99,
+        "irpef_band3_rate": 0.99,
+        "inps_rate": 0.0,
+    })
+    assert r_tax.status_code == 200
+
+    # Log out A, register user B
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/register", json={"email": "b@x.com", "password": "Password1!", "name": "B"})
+    client.post("/api/v1/auth/login", json={"email": "b@x.com", "password": "Password1!"})
+
+    # B creates a salary config valid from July 2026 — this is the period where A's
+    # poisoned 99% row is the most recent match (ahead of the 2026-01-01 seed row).
+    r = client.post("/api/v1/salary", json={
+        "valid_from": "2026-07-01",
+        "ral": 36000,
+        "employer_contrib_rate": 0.04,
+        "voluntary_contrib_rate": 0.0,
+        "regional_tax_rate": 0.0173,
+        "municipal_tax_rate": 0.001,
+        "salary_months": 12,
+        "meal_vouchers_annual": 0,
+        "welfare_annual": 0,
+    })
+    assert r.status_code == 200
+    net = float(r.json().get("computed_net_monthly", 0))
+    # With IRPEF at 99%, net would be essentially 0 (or negative). For RAL=36000, normal net is ~1700–2200.
+    assert net > 500, f"B's salary computed with A's absurd 99% IRPEF rate: net={net}"
+
+
 def test_assets_put_override_does_not_affect_other_user(client, db):
     """Bob setting a manual override on an asset name that Alice also has must not affect Alice."""
     from app.models.asset import Asset

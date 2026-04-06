@@ -39,7 +39,7 @@ def preview_salary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    tax_cfg = resolve_tax_config(db, as_of)
+    tax_cfg = resolve_tax_config(db, as_of, current_user.id)
     if not tax_cfg:
         raise HTTPException(422, "No tax config found for the given period")
 
@@ -67,7 +67,7 @@ def list_salary(current_user: User = Depends(get_current_user), db: Session = De
 
 @router.post("")
 def create_salary(req: SalaryConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    tax_cfg = resolve_tax_config(db, req.valid_from[:7])
+    tax_cfg = resolve_tax_config(db, req.valid_from[:7], current_user.id)
     breakdown = calculate_salary(req, tax_cfg) if tax_cfg else None
     sc = SalaryConfig(user_id=current_user.id, **req.model_dump(),
                       computed_net_monthly=breakdown.net_monthly if breakdown else 0)
@@ -84,7 +84,7 @@ def update_salary(salary_id: str, req: SalaryConfigCreate, current_user: User = 
         raise HTTPException(404, "Not found")
     for field, val in req.model_dump(exclude_none=True).items():
         setattr(sc, field, val)
-    tax_cfg = resolve_tax_config(db, sc.valid_from[:7])
+    tax_cfg = resolve_tax_config(db, sc.valid_from[:7], current_user.id)
     if tax_cfg:
         sc.computed_net_monthly = calculate_salary(sc, tax_cfg).net_monthly
     db.commit()

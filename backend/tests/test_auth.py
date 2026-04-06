@@ -1,42 +1,5 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from app.main import app
-from app.database import Base
-from app.deps import get_db
 from app.config import get_settings, Settings
-
-
-@pytest.fixture()
-def client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    def override():
-        db = Session()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    # Set DEVELOPMENT_MODE before TestClient.__enter__ so the lifespan
-    # sees it when warn_insecure_defaults() is called at startup.
-    import os
-    os.environ["DEVELOPMENT_MODE"] = "true"
-    get_settings.cache_clear()
-    app.dependency_overrides[get_db] = override
-    with TestClient(app, raise_server_exceptions=True) as c:
-        yield c
-    app.dependency_overrides.clear()
-    os.environ.pop("DEVELOPMENT_MODE", None)
-    get_settings.cache_clear()
 
 
 def test_register_creates_user(client):
@@ -363,3 +326,26 @@ def test_oidc_logout_with_valid_id_token_cookie_redirects_with_hint(client):
         for key in ("OIDC_ENABLED", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI"):
             os.environ.pop(key, None)
         get_settings.cache_clear()
+
+
+def test_oidc_user_can_delete_account(client, db):
+    """An OIDC-only user (no hashed_password) must be able to delete their account
+    without supplying a password."""
+    from app.models.user import User
+
+    # Register a normal user then strip their password to simulate OIDC-only
+    client.post("/api/v1/auth/register", json={
+        "email": "oidcuser@x.com", "password": "Password1!", "name": "OIDC"
+    })
+    client.post("/api/v1/auth/login", json={"email": "oidcuser@x.com", "password": "Password1!"})
+
+    # Simulate OIDC-only: clear hashed_password in DB
+    user = db.query(User).filter_by(email="oidcuser@x.com").first()
+    user.hashed_password = None
+    user.oidc_sub = "google|oidc-test-sub-123"
+    db.commit()
+
+    # OIDC user should be able to delete without a password
+    r = client.request("DELETE", "/api/v1/users/me", json={})
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
+    assert r.json() == {"ok": True}

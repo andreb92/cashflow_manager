@@ -15,7 +15,7 @@ def list_transfers(
     billing_month: Optional[str] = None,
     from_account: Optional[str] = None,
     to_account: Optional[str] = None,
-    limit: int = 50, offset: int = 0,
+    limit: Optional[int] = None, offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -26,7 +26,10 @@ def list_transfers(
         q = q.filter_by(from_account_name=from_account)
     if to_account:
         q = q.filter_by(to_account_name=to_account)
-    return q.order_by(Transfer.date.desc()).offset(offset).limit(limit).all()
+    q = q.order_by(Transfer.date.desc()).offset(offset)
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
 
 @router.post("")
 def create_transfer(req: TransferCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

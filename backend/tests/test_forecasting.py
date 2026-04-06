@@ -145,6 +145,27 @@ def test_update_line(client):
     assert r.json()["base_amount"] == 300.0
 
 
+def test_update_line_response_includes_adjustments(client):
+    """PUT /lines/{id} must return same shape as POST /lines — including adjustments list."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 3}).json()["id"]
+    line_id = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "Expense", "base_amount": 100.0,
+    }).json()["id"]
+    # Add an adjustment to ensure it comes back in the update response
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-06-01", "new_amount": 150.0,
+    })
+    r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json={
+        "detail": "Expense updated", "base_amount": 120.0,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert "adjustments" in body, "update_line response must include adjustments key"
+    assert len(body["adjustments"]) == 1
+    assert body["adjustments"][0]["valid_from"] == "2027-06-01"
+
+
 def test_update_line_not_found(client):
     _setup(client)
     fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
@@ -405,3 +426,41 @@ def test_percentage_adjustment_negative_percent(client):
         assert m["effective_amount"] == pytest.approx(800.0), (
             f"Expected 800.0 for month {m['month']}, got {m['effective_amount']}"
         )
+
+
+def test_update_forecast_trims_out_of_range_adjustments(client):
+    """Reducing projection_years must delete adjustments beyond the new end date."""
+    client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "Password1!", "name": "U"})
+    client.post("/api/v1/auth/login", json={"email": "u@x.com", "password": "Password1!"})
+
+    # Create forecast: base_year=2026, 3 projection years → end 2029-12-01
+    fc = client.post("/api/v1/forecasts", json={
+        "name": "Plan", "base_year": 2026, "projection_years": 3,
+    }).json()
+    fc_id = fc["id"]
+
+    # Add a line
+    line = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "Test line", "base_amount": 100,
+    }).json()
+    line_id = line["id"]
+
+    # Add two adjustments: one in 2028 (will be kept) and one in 2029 (will be trimmed)
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2028-01-01", "new_amount": 200,
+    })
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2029-06-01", "new_amount": 300,
+    })
+
+    # Reduce projection to 2 years → end 2028-12-01; 2029 adjustment must be deleted
+    r = client.put(f"/api/v1/forecasts/{fc_id}", json={"projection_years": 2})
+    assert r.status_code == 200
+
+    # Fetch the forecast and check adjustments
+    detail = client.get(f"/api/v1/forecasts/{fc_id}").json()
+    line_data = next(l for l in detail["lines"] if l["id"] == line_id)
+    adj_dates = [a["valid_from"] for a in line_data["adjustments"]]
+
+    assert "2028-01-01" in adj_dates, "In-range adjustment must be kept"
+    assert "2029-06-01" not in adj_dates, "Out-of-range adjustment must be deleted"

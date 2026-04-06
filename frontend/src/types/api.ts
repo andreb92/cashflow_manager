@@ -186,6 +186,7 @@ export interface ForecastAdjustment {
   forecast_line_id: string;
   valid_from: string;
   new_amount: number;
+  adjustment_type: 'fixed' | 'percentage';
 }
 
 export interface ForecastProjection {

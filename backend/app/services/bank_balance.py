@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.payment_method import PaymentMethod, MainBankHistory
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
+from app.services.billing import NEXT_MONTH_TYPES
 
 
 def compute_bank_balance(user_id: str, year: int, month: int, db: Session) -> float:
@@ -104,8 +105,12 @@ def compute_bank_balance(user_id: str, year: int, month: int, db: Session) -> fl
                 else:
                     balance -= float(tx.amount)
             elif tx.transaction_direction == "credit":
-                # Credit-direction transactions on non-bank PMs (CC payoffs from bank)
-                balance -= float(tx.amount)
+                # Only deduct from main bank when the transaction is on a CC/revolving PM.
+                # These represent credit card statement payoffs funded from the bank account.
+                # Prepaid, saving, or other PMs are not bank-funded.
+                tx_pm = pm_by_id.get(tx.payment_method_id)
+                if tx_pm and tx_pm.type in NEXT_MONTH_TYPES:
+                    balance -= float(tx.amount)
 
         # Apply transfers for this billing month
         for t in transfers_by_month.get(month_first, []):
@@ -196,7 +201,9 @@ def compute_bank_balances_for_year(user_id: str, year: int, db: Session) -> dict
                         else:
                             balance -= float(tx.amount)
                     elif tx.transaction_direction == "credit":
-                        balance -= float(tx.amount)
+                        tx_pm = pm_by_id.get(tx.payment_method_id)
+                        if tx_pm and tx_pm.type in NEXT_MONTH_TYPES:
+                            balance -= float(tx.amount)
                 for t in transfers_by_month.get(month_first, []):
                     if t.from_account_name == pm.name:
                         balance -= float(t.amount)
