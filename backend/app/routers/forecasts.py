@@ -109,11 +109,15 @@ def update_forecast(fc_id: str, req: ForecastUpdate, current_user: User = Depend
         fc.name = req.name
     if req.projection_years is not None:
         new_end = f"{fc.base_year + req.projection_years:04d}-12-01"
-        # Delete adjustments beyond new end
-        for line in db.query(ForecastLine).filter_by(forecast_id=fc_id).all():
-            for adj in db.query(ForecastAdjustment).filter_by(forecast_line_id=line.id).all():
-                if adj.valid_from > new_end:
-                    db.delete(adj)
+        line_ids = [
+            line.id for line in
+            db.query(ForecastLine).filter_by(forecast_id=fc_id).all()
+        ]
+        if line_ids:
+            db.query(ForecastAdjustment).filter(
+                ForecastAdjustment.forecast_line_id.in_(line_ids),
+                ForecastAdjustment.valid_from > new_end,
+            ).delete(synchronize_session=False)
         fc.projection_years = req.projection_years
     db.commit()
     db.refresh(fc)
@@ -164,7 +168,17 @@ def update_line(fc_id: str, line_id: str, req: ForecastLineCreate, current_user:
         setattr(line, field, val)
     db.commit()
     db.refresh(line)
-    return line
+    adjustments = db.query(ForecastAdjustment).filter_by(forecast_line_id=line.id).all()
+    return {
+        "id": line.id, "detail": line.detail, "category_id": line.category_id,
+        "base_amount": float(line.base_amount), "billing_day": line.billing_day,
+        "payment_method_id": line.payment_method_id, "notes": line.notes,
+        "adjustments": [
+            {"id": a.id, "valid_from": a.valid_from, "new_amount": float(a.new_amount),
+             "adjustment_type": a.adjustment_type}
+            for a in adjustments
+        ],
+    }
 
 
 @router.delete("/{fc_id}/lines/{line_id}")

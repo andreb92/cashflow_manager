@@ -76,6 +76,62 @@ def test_pension_month_count_uses_relativedelta(_standalone_db, make_user):
     assert abs(pension_rows[0].computed_amount - expected) < 0.01
 
 
+def test_pension_fractional_month_rounds_up_at_15_days(_standalone_db, make_user):
+    """A period with >= 15 leftover days must round up to the next whole month."""
+    from app.services.assets import compute_assets
+    from app.models.salary import SalaryConfig
+    from app.models.user import UserSetting
+
+    user = make_user(email="pension_round_up@test.com")
+    db = _standalone_db
+
+    # valid_from=2026-01-16 → active 2026-01-16..2027-01-01 = 11 months 16 days → rounds to 12
+    db.add(SalaryConfig(
+        user_id=user.id, valid_from="2026-01-16", ral=12000,
+        employer_contrib_rate=0.10, voluntary_contrib_rate=0.0,
+        regional_tax_rate=0.0, municipal_tax_rate=0.0,
+        meal_vouchers_annual=0, welfare_annual=0,
+        salary_months=12, computed_net_monthly=0,
+    ))
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.commit()
+
+    rows = compute_assets(user.id, 2026, db)
+    pension_rows = [r for r in rows if r.asset_type == "pension"]
+    assert len(pension_rows) == 1
+    # 12 months (rounded up from 11m16d), rate=0.10, ral=12000
+    expected = round(0.10 * 12000 * 12 / 12, 2)
+    assert abs(pension_rows[0].computed_amount - expected) < 0.01
+
+
+def test_pension_fractional_month_drops_below_15_days(_standalone_db, make_user):
+    """A period with < 15 leftover days must NOT round up."""
+    from app.services.assets import compute_assets
+    from app.models.salary import SalaryConfig
+    from app.models.user import UserSetting
+
+    user = make_user(email="pension_no_round@test.com")
+    db = _standalone_db
+
+    # valid_from=2026-01-18 → active 2026-01-18..2027-01-01 = 11 months 14 days → stays 11
+    db.add(SalaryConfig(
+        user_id=user.id, valid_from="2026-01-18", ral=12000,
+        employer_contrib_rate=0.10, voluntary_contrib_rate=0.0,
+        regional_tax_rate=0.0, municipal_tax_rate=0.0,
+        meal_vouchers_annual=0, welfare_annual=0,
+        salary_months=12, computed_net_monthly=0,
+    ))
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.commit()
+
+    rows = compute_assets(user.id, 2026, db)
+    pension_rows = [r for r in rows if r.asset_type == "pension"]
+    assert len(pension_rows) == 1
+    # 11 months (14 leftover days < 15 threshold), rate=0.10, ral=12000
+    expected = round(0.10 * 12000 * 11 / 12, 2)
+    assert abs(pension_rows[0].computed_amount - expected) < 0.01
+
+
 def test_assets_transfer_balance_multiple_accounts(_standalone_db, make_user):
     """compute_assets must correctly aggregate transfers across multiple saving accounts."""
     from app.services.assets import compute_assets

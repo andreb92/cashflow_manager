@@ -25,8 +25,6 @@ def _compute_stamp_duty(user_id: str, month_first: str, all_txs: list, db: Sessi
     if not stamp_duty_cards:
         return 0.0
 
-    stamp_duty_card_ids = {pm.id for pm in stamp_duty_cards}
-
     total = 0.0
     for pm in stamp_duty_cards:
         monthly_spend = sum(

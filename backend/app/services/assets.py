@@ -88,7 +88,7 @@ def compute_assets(user_id: str, year: int, db: Session) -> List[AssetRow]:
         if active_start >= active_end:
             continue
         rd = _rdelta(_p(active_end), _p(active_start))
-        months_active = rd.years * 12 + rd.months
+        months_active = rd.years * 12 + rd.months + (1 if rd.days >= 15 else 0)
         ral = float(sc.ral)
         rate = float(sc.employer_contrib_rate) + float(sc.voluntary_contrib_rate)
         pension_total += rate * ral * months_active / 12

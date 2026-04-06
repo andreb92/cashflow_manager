@@ -251,3 +251,27 @@ def test_delete_transfer_cascade_future(client):
     remaining = client.get("/api/v1/transfers").json()
     assert len(remaining) == 1
     assert remaining[0]["id"] == first_id
+
+
+def test_transfers_list_returns_all_without_explicit_limit(client):
+    """Default list must return all transfers when no limit is specified."""
+    client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "Password1!", "name": "U"})
+    client.post("/api/v1/auth/login", json={"email": "u@x.com", "password": "Password1!"})
+
+    # Create 55 transfers
+    for i in range(55):
+        r = client.post("/api/v1/transfers", json={
+            "date": "2026-03-01",
+            "detail": f"Transfer {i}",
+            "amount": 10,
+            "from_account_type": "bank",
+            "from_account_name": f"Bank{i}",
+            "to_account_type": "saving",
+            "to_account_name": f"Savings{i}",
+        })
+        assert r.status_code == 200
+
+    # Without explicit limit, must return all 55
+    r = client.get("/api/v1/transfers", params={"billing_month": "2026-03"})
+    assert r.status_code == 200
+    assert len(r.json()) == 55, f"Expected 55 transfers, got {len(r.json())}"

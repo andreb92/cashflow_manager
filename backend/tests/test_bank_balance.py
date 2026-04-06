@@ -1,6 +1,7 @@
 import pytest
 from tests.test_onboarding import WIZARD_PAYLOAD
 
+
 def _setup(client, db):
     client.post("/api/v1/auth/register", json={
         "email": "alice@example.com", "password": "Password1!", "name": "Alice"
@@ -160,3 +161,70 @@ def test_compute_bank_balances_for_year_mid_year_switch(_standalone_db, make_use
     assert result[8] == pytest.approx(5200.0)
     # Dec: no more transactions → 5200
     assert result[12] == pytest.approx(5200.0)
+
+
+def test_credit_on_prepaid_does_not_reduce_bank_balance(client, db):
+    """
+    A 'credit' transaction on a prepaid PM must not reduce the main bank balance.
+    Only credit_card and revolving PMs represent bank payoffs.
+    """
+    from app.services.bank_balance import compute_bank_balance
+
+    client.post("/api/v1/auth/register", json={"email": "u@x.com", "password": "Password1!", "name": "U"})
+    client.post("/api/v1/auth/login", json={"email": "u@x.com", "password": "Password1!"})
+
+    # Onboard with a main bank
+    client.post("/api/v1/onboarding", json={
+        "tracking_start_date": "2026-01-01",
+        "main_bank": {"name": "MainBank", "opening_balance": 1000.0},
+    })
+
+    # Add a prepaid PM
+    prepaid = client.post("/api/v1/payment-methods", json={"name": "PrepaidCard", "type": "prepaid"}).json()
+
+    # Add a 'credit' transaction on the prepaid — simulates a refund or top-up receipt
+    # This should NOT deduct from the main bank balance
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-15",
+        "detail": "Prepaid credit",
+        "amount": 200,
+        "payment_method_id": prepaid["id"],
+        "transaction_direction": "credit",
+    })
+
+    from app.models.user import User
+    user = db.query(User).filter_by(email="u@x.com").first()
+    balance = compute_bank_balance(user.id, 2026, 1, db)
+
+    # Balance should still be 1000 (no income, no bank debit)
+    assert balance == pytest.approx(1000.0), (
+        f"Credit on prepaid PM incorrectly reduced bank balance to {balance}"
+    )
+
+
+def test_credit_on_credit_card_reduces_bank_balance(client, db):
+    """A 'credit' transaction on a credit_card PM must reduce the main bank balance.
+
+    CC transactions bill the *next* month (see billing.py NEXT_MONTH_TYPES), so a
+    transaction dated 2026-01-15 has billing_month 2026-02-01 and appears in February.
+    """
+    from app.services.bank_balance import compute_bank_balance
+    client.post("/api/v1/auth/register", json={"email": "v@x.com", "password": "Password1!", "name": "V"})
+    client.post("/api/v1/auth/login", json={"email": "v@x.com", "password": "Password1!"})
+    client.post("/api/v1/onboarding", json={
+        "tracking_start_date": "2026-01-01",
+        "main_bank": {"name": "MainBank", "opening_balance": 1000.0},
+    })
+    cc = client.post("/api/v1/payment-methods", json={"name": "MyCreditCard", "type": "credit_card"}).json()
+    client.post("/api/v1/transactions", json={
+        "date": "2026-01-15",
+        "detail": "CC payoff",
+        "amount": 300,
+        "payment_method_id": cc["id"],
+        "transaction_direction": "credit",
+    })
+    from app.models.user import User
+    user = db.query(User).filter_by(email="v@x.com").first()
+    # CC billing_month is next month (Feb 2026), so check February balance
+    balance = compute_bank_balance(user.id, 2026, 2, db)
+    assert balance == pytest.approx(700.0), f"CC credit should reduce bank balance, got {balance}"
