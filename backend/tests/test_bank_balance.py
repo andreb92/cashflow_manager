@@ -228,3 +228,160 @@ def test_credit_on_credit_card_reduces_bank_balance(client, db):
     # CC billing_month is next month (Feb 2026), so check February balance
     balance = compute_bank_balance(user.id, 2026, 2, db)
     assert balance == pytest.approx(700.0), f"CC credit should reduce bank balance, got {balance}"
+
+
+def test_compute_bank_balance_no_tracking_start_returns_zero(_standalone_db, make_user):
+    """compute_bank_balance must return 0.0 when user has no tracking_start_date."""
+    from app.services.bank_balance import compute_bank_balance
+    user = make_user(email="nostart@test.com")
+    result = compute_bank_balance(user.id, 2026, 1, _standalone_db)
+    assert result == 0.0
+
+
+def test_compute_bank_balance_no_mbh_rows_returns_zero(_standalone_db, make_user):
+    """compute_bank_balance returns 0.0 when tracking_start_date is set but no MBH rows exist."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.user import UserSetting
+
+    user = make_user(email="nombh@test.com")
+    db = _standalone_db
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.commit()
+
+    result = compute_bank_balance(user.id, 2026, 1, db)
+    assert result == 0.0
+
+
+def test_compute_bank_balance_missing_pm_is_skipped(_standalone_db, make_user):
+    """compute_bank_balance skips transaction/transfer logic when MBH's PM is not found.
+    The opening_balance is still applied (set before PM lookup), but subsequent months
+    with a valid_from < month_first also skip since PM is still missing."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+
+    user = make_user(email="missingpm@test.com")
+    db = _standalone_db
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    # Real PM for Jan, deleted/missing PM for Feb (simulate by using a non-existent id in MBH)
+    real_pm = PaymentMethod(user_id=user.id, name="RealBank", type="bank", is_main_bank=True)
+    db.add(real_pm)
+    db.flush()
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=real_pm.id,
+        valid_from="2026-01-01", opening_balance=500,
+    ))
+    # A second MBH entry pointing to a PM that doesn't exist
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id="nonexistent-pm-id",
+        valid_from="2026-02-01", opening_balance=999,
+    ))
+    db.commit()
+
+    # February: opening_balance resets to 999 (MBH valid_from == month_first), then PM lookup
+    # fails so no transactions apply — balance is 999
+    result = compute_bank_balance(user.id, 2026, 2, db)
+    assert result == pytest.approx(999.0)
+
+
+def test_compute_bank_balance_incoming_transfer_increases_balance(_standalone_db, make_user):
+    """A transfer TO the main bank account must increase the balance."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="xfer_to@test.com")
+    db = _standalone_db
+
+    pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    db.add(pm)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    # Transfer FROM savings TO main bank
+    db.add(Transfer(
+        user_id=user.id, date="2026-01-15", amount=500,
+        from_account_type="saving", from_account_name="MySavings",
+        to_account_type="bank", to_account_name="MyBank",
+        billing_month="2026-01-01", detail="",
+    ))
+    db.commit()
+
+    result = compute_bank_balance(user.id, 2026, 1, db)
+    assert result == pytest.approx(1500.0)
+
+
+def test_compute_bank_balances_for_year_no_tracking_start_returns_zeros(_standalone_db, make_user):
+    """compute_bank_balances_for_year returns all zeros when no tracking_start_date."""
+    from app.services.bank_balance import compute_bank_balances_for_year
+    user = make_user(email="noyearstart@test.com")
+    result = compute_bank_balances_for_year(user.id, 2026, _standalone_db)
+    assert set(result.keys()) == set(range(1, 13))
+    assert all(v == 0.0 for v in result.values())
+
+
+def test_compute_bank_balances_for_year_debit_and_transfers(_standalone_db, make_user):
+    """Year function covers debit, CC credit, and transfers (FROM and TO the main bank)."""
+    from app.services.bank_balance import compute_bank_balances_for_year
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.transfer import Transfer
+    from app.models.category import Category
+
+    user = make_user(email="year_debit@test.com")
+    db = _standalone_db
+
+    pm = PaymentMethod(user_id=user.id, name="YearBank", type="bank", is_main_bank=True)
+    cc_pm = PaymentMethod(user_id=user.id, name="MyCC", type="credit_card", is_main_bank=False)
+    db.add_all([pm, cc_pm])
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Housing", sub_type="Rent")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm.id,
+        valid_from="2026-01-01", opening_balance=2000,
+    ))
+    # Debit transaction on main bank in January
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-10", detail="Rent",
+        amount=400, payment_method_id=pm.id, category_id=cat.id,
+        transaction_direction="debit", billing_month="2026-01-01",
+    ))
+    # CC credit transaction: billed in February (next-month billing for credit_card)
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-15", detail="CC Bill",
+        amount=150, payment_method_id=cc_pm.id, category_id=cat.id,
+        transaction_direction="credit", billing_month="2026-02-01",
+    ))
+    # Transfer FROM bank in March (reduces balance)
+    db.add(Transfer(
+        user_id=user.id, date="2026-03-05", amount=200,
+        from_account_type="bank", from_account_name="YearBank",
+        to_account_type="saving", to_account_name="Savings",
+        billing_month="2026-03-01", detail="",
+    ))
+    # Transfer TO bank in April (increases balance)
+    db.add(Transfer(
+        user_id=user.id, date="2026-04-10", amount=100,
+        from_account_type="saving", from_account_name="Savings",
+        to_account_type="bank", to_account_name="YearBank",
+        billing_month="2026-04-01", detail="",
+    ))
+    db.commit()
+
+    result = compute_bank_balances_for_year(user.id, 2026, db)
+
+    assert result[1] == pytest.approx(1600.0)   # 2000 - 400
+    assert result[2] == pytest.approx(1450.0)   # 1600 - 150 (CC credit)
+    assert result[3] == pytest.approx(1250.0)   # 1450 - 200
+    assert result[4] == pytest.approx(1350.0)   # 1250 + 100

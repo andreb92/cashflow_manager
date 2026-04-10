@@ -86,3 +86,30 @@ def test_delete_earliest_user_owned_tax_config_returns_400(client):
     config_id = client.post("/api/v1/tax-config", json={"valid_from": "2020-01-01"}).json()["id"]
     r = client.delete(f"/api/v1/tax-config/{config_id}")
     assert r.status_code == 400
+
+
+def test_resolve_tax_config_returns_user_row_when_present(client, db):
+    """resolve_tax_config must return a user-specific row (line 16) instead of the system row."""
+    from app.models.user import User
+    from app.models.tax import TaxConfig
+    from app.models.user import gen_uuid
+    from app.services.tax import resolve_tax_config
+
+    client.post("/api/v1/auth/register", json={
+        "email": "taxuser@example.com", "password": "Password1!", "name": "Tax"
+    })
+    user = db.query(User).filter_by(email="taxuser@example.com").first()
+
+    user_row = TaxConfig(
+        id=gen_uuid(),
+        user_id=user.id,
+        valid_from="2026-01-01",
+        inps_rate=0.05,
+    )
+    db.add(user_row)
+    db.commit()
+
+    result = resolve_tax_config(db, "2026-01", user.id)
+    assert result is not None
+    assert result.user_id == user.id
+    assert abs(float(result.inps_rate) - 0.05) < 1e-6
