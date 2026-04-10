@@ -349,3 +349,47 @@ def test_oidc_user_can_delete_account(client, db):
     r = client.request("DELETE", "/api/v1/users/me", json={})
     assert r.status_code == 200, f"Expected 200, got {r.status_code}: {r.text}"
     assert r.json() == {"ok": True}
+
+
+def test_login_oidc_only_user_returns_401(client, db):
+    """A user with no hashed_password (OIDC-only) cannot log in via basic auth."""
+    from app.models.user import User, gen_uuid
+    user = User(id=gen_uuid(), email="oidconly@test.com", name="OIDC", oidc_sub="sub-456")
+    db.add(user)
+    db.commit()
+    resp = client.post("/api/v1/auth/login", json={"email": "oidconly@test.com", "password": "anything"})
+    assert resp.status_code == 401
+
+
+def test_oidc_login_disabled_returns_404(client):
+    """GET /auth/oidc/login must return 404 when OIDC is not enabled."""
+    resp = client.get("/api/v1/auth/oidc/login", follow_redirects=False)
+    assert resp.status_code == 404
+
+
+def test_oidc_callback_disabled_returns_404(client):
+    """GET /auth/oidc/callback must return 404 when OIDC is not enabled."""
+    resp = client.get("/api/v1/auth/oidc/callback?code=abc&state=xyz", follow_redirects=False)
+    assert resp.status_code == 404
+
+
+def test_get_current_user_invalid_token_returns_401(client):
+    """A completely invalid JWT cookie must return 401."""
+    client.cookies.set("access_token", "not.a.valid.jwt")
+    resp = client.get("/api/v1/auth/me")
+    client.cookies.clear()
+    assert resp.status_code == 401
+
+
+def test_get_current_user_deleted_user_returns_401(client, db):
+    """A valid JWT for a deleted user must return 401."""
+    from app.models.user import User
+    from app.services.auth import create_access_token
+    client.post("/api/v1/auth/register", json={"email": "gone@test.com", "password": "pass1234", "name": "Gone"})
+    user = db.query(User).filter_by(email="gone@test.com").first()
+    token = create_access_token({"sub": user.id})
+    db.delete(user)
+    db.commit()
+    client.cookies.set("access_token", token)
+    resp = client.get("/api/v1/auth/me")
+    assert resp.status_code == 401

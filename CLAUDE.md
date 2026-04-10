@@ -38,7 +38,7 @@ npm run test         # Run tests once (Vitest)
 npm run test:watch   # Watch mode
 
 # Run a single test file
-npm run test -- src/tests/transactions.test.ts
+npm run test -- tests/pages/TransactionsPage.test.tsx
 ```
 
 ### Docker

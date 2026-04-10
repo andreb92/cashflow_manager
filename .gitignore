@@ -19,3 +19,6 @@ deploy/data/*.db
 /package.json
 e2e/playwright-report/
 e2e/test-results/
+.claude
+docs/superpowers
+CLAUDE.md

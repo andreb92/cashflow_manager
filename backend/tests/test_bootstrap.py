@@ -58,3 +58,33 @@ def test_tax_config_seeded():
     app.dependency_overrides.clear()
     os.environ.pop("DEVELOPMENT_MODE", None)
     get_settings.cache_clear()
+
+
+def test_get_default_categories_returns_all_entries():
+    """get_default_categories() must return the full DEFAULT_CATEGORIES list."""
+    from app.services.seed import get_default_categories, DEFAULT_CATEGORIES
+    result = get_default_categories()
+    assert result == list(DEFAULT_CATEGORIES)
+    assert len(result) > 0
+
+
+def test_seed_user_categories_creates_categories(_standalone_db, make_user):
+    """seed_user_categories() must create one Category row per DEFAULT_CATEGORIES entry."""
+    from app.services.seed import seed_user_categories, DEFAULT_CATEGORIES
+    from app.models.category import Category
+
+    user = make_user(email="seed_cat@test.com")
+    db = _standalone_db
+
+    seed_user_categories(user.id, db)
+
+    cats = db.query(Category).filter_by(user_id=user.id).all()
+    assert len(cats) == len(DEFAULT_CATEGORIES)
+
+    # Saving categories must be inactive
+    saving_cats = [c for c in cats if c.type == "Saving"]
+    assert all(not c.is_active for c in saving_cats)
+
+    # All other categories must be active
+    non_saving = [c for c in cats if c.type != "Saving"]
+    assert all(c.is_active for c in non_saving)
