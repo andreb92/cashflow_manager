@@ -65,11 +65,10 @@ def test_oidc_logout_reads_id_token_from_cookie(oidc_client):
     }
     from app.services.oidc import encrypt_cookie
     encrypted = encrypt_cookie("raw-id-token", "a" * 64)
+    oidc_client.cookies.set("oidc_id_token", encrypted)
     with patch("app.services.oidc.discover_endpoints", return_value=discovery):
-        resp = oidc_client.get(
-            "/api/v1/auth/oidc/logout",
-            cookies={"oidc_id_token": encrypted},
-        )
+        resp = oidc_client.get("/api/v1/auth/oidc/logout")
+    oidc_client.cookies.delete("oidc_id_token")
     # Should redirect to end_session_endpoint with id_token_hint
     assert resp.status_code in (302, 307)
     assert "end-session" in resp.headers["location"]

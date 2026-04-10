@@ -73,7 +73,9 @@ def client(_shared_engine):
 
     # Set DEVELOPMENT_MODE=true so cookies don't get the Secure flag over plain
     # HTTP in the test client (TestClient uses http://testserver).
+    # Use a 32-byte key to satisfy PyJWT's minimum key length requirement.
     os.environ["DEVELOPMENT_MODE"] = "true"
+    os.environ["SECRET_KEY"] = "test-secret-key-long-enough-for-hs256!"
     get_settings.cache_clear()
 
     app.dependency_overrides[get_db] = override
@@ -82,6 +84,7 @@ def client(_shared_engine):
     app.dependency_overrides.clear()
 
     os.environ.pop("DEVELOPMENT_MODE", None)
+    os.environ.pop("SECRET_KEY", None)
     get_settings.cache_clear()
 
 
