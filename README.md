@@ -1,7 +1,7 @@
 # CashFlow Manager
 
-[![CI](https://github.com/andreb92/cashflow_manager/actions/workflows/ci.yml/badge.svg)](https://github.com/andreb92/cashflow_manager/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/github/v/release/andreb92/cashflow_manager?label=ghcr.io&logo=docker)](https://github.com/andreb92/cashflow_manager/pkgs/container/cashflow-manager)
+[![CI](https://github.com/soulwaxx/cashflow_manager/actions/workflows/ci.yml/badge.svg)](https://github.com/soulwaxx/cashflow_manager/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/github/v/release/soulwaxx/cashflow_manager?label=ghcr.io&logo=docker)](https://github.com/soulwaxx/cashflow_manager/pkgs/container/cashflow-manager)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A self-hosted personal cash flow manager. Track transactions, transfers, recurring expenses, installment plans, salary, assets, and monthly forecasts — all in a single Docker container.
@@ -34,7 +34,7 @@ The production image bundles the React frontend (served by Nginx) and the FastAP
 
 ```bash
 # 1. Clone the deploy directory (or just copy these two files)
-git clone https://github.com/andreb92/cashflow_manager.git
+git clone https://github.com/soulwaxx/cashflow_manager.git
 cd cashflow_manager/deploy
 
 # 2. Create your environment file from the template

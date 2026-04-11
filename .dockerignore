@@ -5,6 +5,7 @@ backend/**/__pycache__/
 backend/.pytest_cache/
 backend/htmlcov/
 backend/coverage.xml
+backend/data
 
 # Node
 frontend/node_modules/
