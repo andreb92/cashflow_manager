@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/andreb92/cashflow_manager/compare/v1.2.2...v1.2.3) (2026-04-11)
+
+
+### Bug Fixes
+
+* code review — security, validation, perf, schema cleanup, tests ([7469b37](https://github.com/andreb92/cashflow_manager/commit/7469b370700d8b08a065dc255614bdf3f96773f7))
+
 ## [1.2.2](https://github.com/andreb92/cashflow_manager/compare/v1.2.1...v1.2.2) (2026-04-06)
 
 
