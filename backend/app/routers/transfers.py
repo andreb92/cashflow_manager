@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Literal
 from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
 from app.deps import get_db, get_current_user
@@ -79,7 +79,7 @@ def get_transfer(transfer_id: str, current_user: User = Depends(get_current_user
 @router.put("/{transfer_id}")
 def update_transfer(
     transfer_id: str, req: TransferUpdate,
-    cascade: str = Query("single"),
+    cascade: Literal["single", "future", "all"] = Query("single"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -115,7 +115,7 @@ def update_transfer(
 @router.delete("/{transfer_id}")
 def delete_transfer(
     transfer_id: str,
-    cascade: str = Query("single"),
+    cascade: Literal["single", "future", "all"] = Query("single"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

@@ -1,27 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
-from pydantic import BaseModel, Field
 from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.salary import SalaryConfig
+from app.schemas.salary import SalaryConfigCreate
 from app.services.salary import calculate_salary
 from app.services.tax import resolve_tax_config
 
 router = APIRouter(prefix="/salary", tags=["salary"])
-
-
-class SalaryConfigCreate(BaseModel):
-    valid_from: str
-    ral: float
-    employer_contrib_rate: float = 0.0
-    voluntary_contrib_rate: float = 0.0
-    regional_tax_rate: float = 0.0
-    municipal_tax_rate: float = 0.0
-    meal_vouchers_annual: float = 0.0
-    welfare_annual: float = 0.0
-    salary_months: int = Field(12, ge=1)
-    manual_net_override: Optional[float] = None
 
 
 # /calculate MUST be registered before /{salary_id} to avoid route shadowing
@@ -43,10 +29,8 @@ def preview_salary(
     if not tax_cfg:
         raise HTTPException(422, "No tax config found for the given period")
 
-    class _Cfg:
-        pass
-    cfg = _Cfg()
-    for k, v in dict(
+    cfg = SalaryConfigCreate(
+        valid_from=as_of,
         ral=ral,
         employer_contrib_rate=employer_contrib_rate,
         voluntary_contrib_rate=voluntary_contrib_rate,
@@ -55,8 +39,7 @@ def preview_salary(
         meal_vouchers_annual=meal_vouchers_annual,
         welfare_annual=welfare_annual,
         salary_months=salary_months,
-    ).items():
-        setattr(cfg, k, v)
+    )
     return calculate_salary(cfg, tax_cfg).__dict__
 
 

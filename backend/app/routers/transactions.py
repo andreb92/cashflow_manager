@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Literal
 from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.transaction import Transaction
@@ -132,7 +132,7 @@ def get_transaction(tx_id: str, current_user: User = Depends(get_current_user), 
 @router.put("/{tx_id}")
 def update_transaction(
     tx_id: str, req: TransactionUpdate,
-    cascade: str = Query("single"),
+    cascade: Literal["single", "future", "all"] = Query("single"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -180,7 +180,7 @@ def update_transaction(
 @router.delete("/{tx_id}")
 def delete_transaction(
     tx_id: str,
-    cascade: str = Query("single"),
+    cascade: Literal["single", "future", "all"] = Query("single"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

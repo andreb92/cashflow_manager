@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { fetchMeOrNull } from './api/auth';
+import { useCurrentUser } from './hooks/useCurrentUser';
 import { onboardingApi } from './api/onboarding';
 import AppShell from './components/layout/AppShell';
 import LoginPage from './pages/LoginPage';
@@ -22,12 +22,7 @@ import TaxConfigSettings from './pages/settings/TaxConfigSettings';
 import AccountSettings from './pages/settings/AccountSettings';
 
 function AuthGuard() {
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: fetchMeOrNull,
-    retry: false,
-    staleTime: 30_000,
-  });
+  const { data: user, isLoading } = useCurrentUser();
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['onboarding', 'status'],
     queryFn: onboardingApi.status,
@@ -43,12 +38,7 @@ function AuthGuard() {
 }
 
 function SetupGuard() {
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: fetchMeOrNull,
-    retry: false,
-    staleTime: 30_000,
-  });
+  const { data: user, isLoading } = useCurrentUser();
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['onboarding', 'status'],
     queryFn: onboardingApi.status,

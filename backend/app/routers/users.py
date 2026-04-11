@@ -16,16 +16,6 @@ class DeleteMeRequest(BaseModel):
     password: Optional[str] = None
 
 
-# /me MUST be registered before /{id} to avoid route shadowing
-@router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id, "email": current_user.email, "name": current_user.name,
-        "has_password": bool(current_user.hashed_password),
-        "has_oidc": bool(current_user.oidc_sub),
-    }
-
-
 @router.delete("/me")
 def delete_me(
     body: DeleteMeRequest,

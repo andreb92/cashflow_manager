@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     from app.routers.auth import router as auth_router
-    app.include_router(auth_router)
+    app.include_router(auth_router, prefix="/api/v1")
     from app.routers import onboarding as onboarding_router
     app.include_router(onboarding_router.router, prefix="/api/v1")
     from app.routers import payment_methods as pm_router, categories as cat_router

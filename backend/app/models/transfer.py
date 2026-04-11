@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, DateTime, Integer, Text, ForeignKey, func
+from sqlalchemy import String, Numeric, DateTime, Integer, Text, ForeignKey, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.user import gen_uuid
@@ -26,3 +26,11 @@ class Transfer(Base):
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_transfer_user_billing_month", "user_id", "billing_month"),
+        Index("ix_transfer_parent_id", "parent_transfer_id"),
+    )

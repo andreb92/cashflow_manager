@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+from app.schemas.payment_method import PaymentMethodType
 
 class MainBankIn(BaseModel):
     name: str
@@ -11,7 +12,7 @@ class AdditionalBankIn(BaseModel):
 
 class PaymentMethodIn(BaseModel):
     name: str
-    type: str
+    type: PaymentMethodType
     linked_bank_name: Optional[str] = None
     opening_balance: Optional[float] = None
 

@@ -9,19 +9,17 @@ _STAMP_DUTY_THRESHOLD = 77.47
 _STAMP_DUTY_AMOUNT = 2.00
 
 
-def _compute_stamp_duty(user_id: str, month_first: str, all_txs: list, db: Session) -> float:
+def _compute_stamp_duty(month_first: str, all_txs: list[Transaction], stamp_duty_cards: list[PaymentMethod]) -> float:
     """
-    Compute the Italian imposta di bollo (stamp duty) for a given month.
+    Compute the Italian imposta di bollo for a given month.
 
-    Rules:
-    - Only credit cards with has_stamp_duty == True are eligible.
-    - If monthly spend on such a card exceeds €77.47, add €2.00 per card.
+    Only credit cards with has_stamp_duty=True are eligible (passed as stamp_duty_cards).
+    If a card's debit spend for the month exceeds €77.47, add €2.00 per card.
+
+    Accepts a pre-loaded list of stamp_duty_cards (PaymentMethod rows) and a
+    pre-filtered list of transactions for the month to avoid per-call DB queries.
+    The caller is responsible for loading and filtering them.
     """
-    stamp_duty_cards = (
-        db.query(PaymentMethod)
-        .filter_by(user_id=user_id, type="credit_card", has_stamp_duty=True)
-        .all()
-    )
     if not stamp_duty_cards:
         return 0.0
 
@@ -32,7 +30,7 @@ def _compute_stamp_duty(user_id: str, month_first: str, all_txs: list, db: Sessi
             for tx in all_txs
             if tx.payment_method_id == pm.id
             and tx.billing_month == month_first
-            and tx.transaction_direction in ("debit", "credit")
+            and tx.transaction_direction == "debit"
         )
         if monthly_spend > _STAMP_DUTY_THRESHOLD:
             total += _STAMP_DUTY_AMOUNT
@@ -49,7 +47,6 @@ def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
 
     total_income = sum(float(t.amount) for t in txs if t.transaction_direction == "income")
 
-    # Build outcomes keyed by payment method name
     pm_ids = {t.payment_method_id for t in txs if t.transaction_direction in ("debit", "credit")}
     pm_names: dict[str, str] = {}
     if pm_ids:
@@ -62,7 +59,6 @@ def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
             name = pm_names.get(tx.payment_method_id, tx.payment_method_id)
             by_method[name] = by_method.get(name, 0) + float(tx.amount)
 
-    # Transfers affecting bank balance
     transfers = db.query(Transfer).filter_by(user_id=user_id).filter(
         Transfer.billing_month == month_first
     ).all()
@@ -72,7 +68,13 @@ def monthly_summary(user_id: str, year: int, month: int, db: Session) -> dict:
 
     bank_balance = compute_bank_balance(user_id, year, month, db)
 
-    stamp_duty = _compute_stamp_duty(user_id, month_first, txs, db)
+    # Load stamp-duty cards once per call (not inside _compute_stamp_duty)
+    stamp_duty_cards = (
+        db.query(PaymentMethod)
+        .filter_by(user_id=user_id, type="credit_card", has_stamp_duty=True)
+        .all()
+    )
+    stamp_duty = _compute_stamp_duty(month_first, txs, stamp_duty_cards)
 
     return {
         "year": year,
@@ -94,7 +96,6 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
     """
     year_prefix = f"{year:04d}-"
 
-    # Load all transactions for the year in one query
     all_txs = (
         db.query(Transaction)
         .filter_by(user_id=user_id)
@@ -106,14 +107,12 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
         m = int(tx.billing_month[5:7])
         txs_by_month[m].append(tx)
 
-    # Load all PMs referenced by this year's transactions in one query
     pm_ids = {tx.payment_method_id for tx in all_txs}
     pm_names: dict[str, str] = {}
     if pm_ids:
         pms = db.query(PaymentMethod).filter(PaymentMethod.id.in_(pm_ids)).all()
         pm_names = {pm.id: pm.name for pm in pms}
 
-    # Load all transfers for the year in one query
     all_transfers = (
         db.query(Transfer)
         .filter_by(user_id=user_id)
@@ -125,10 +124,8 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
         m = int(t.billing_month[5:7])
         transfers_by_month[m].append(t)
 
-    # Single-pass bank balance computation for all 12 months
     bank_balances = compute_bank_balances_for_year(user_id, year, db)
 
-    # Load stamp-duty credit cards once for the whole year
     stamp_duty_cards = (
         db.query(PaymentMethod)
         .filter_by(user_id=user_id, type="credit_card", has_stamp_duty=True)
@@ -151,16 +148,7 @@ def year_monthly_summaries(user_id: str, year: int, db: Session) -> list[dict]:
         transfers_in = sum(float(t.amount) for t in transfers if t.to_account_type == "bank")
 
         month_first = f"{year:04d}-{month:02d}-01"
-        stamp_duty = 0.0
-        for pm in stamp_duty_cards:
-            monthly_spend = sum(
-                float(tx.amount)
-                for tx in txs
-                if tx.payment_method_id == pm.id
-                and tx.transaction_direction in ("debit", "credit")
-            )
-            if monthly_spend > _STAMP_DUTY_THRESHOLD:
-                stamp_duty += _STAMP_DUTY_AMOUNT
+        stamp_duty = _compute_stamp_duty(month_first, txs, stamp_duty_cards)
 
         results.append({
             "year": year,

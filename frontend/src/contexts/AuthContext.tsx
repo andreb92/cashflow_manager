@@ -1,6 +1,7 @@
 import React, { createContext, useContext } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { authApi, fetchMeOrNull } from '../api/auth';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { authApi } from '../api/auth';
 import type { User } from '../types/api';
 
 interface AuthState {
@@ -15,12 +16,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
 
-  const { data: user = null, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: fetchMeOrNull,
-    retry: false,
-    staleTime: 60_000,
-  });
+  const { data: user = null, isLoading } = useCurrentUser();
 
   const logout = async () => {
     await authApi.logout();

@@ -85,8 +85,10 @@ def test_delete_me_clears_access_token_cookie(client):
 
 def test_oidc_logout_without_cookie_redirects_to_login(client):
     """oidc_logout with no oidc_id_token cookie must redirect to /login, not crash."""
+    # Register and login to be authenticated
+    client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     # Ensure no oidc_id_token cookie is present
-    client.cookies.clear()
+    client.cookies.delete("oidc_id_token")
     resp = client.get("/api/v1/auth/oidc/logout", follow_redirects=False)
     # Should redirect to /login (no valid OIDC session to terminate)
     assert resp.status_code in (302, 307)
@@ -291,6 +293,9 @@ def test_oidc_logout_with_valid_id_token_cookie_redirects_with_hint(client):
     from unittest.mock import patch, AsyncMock
     from app.services.oidc import encrypt_cookie
     from app.config import get_settings
+
+    # Register and login to be authenticated
+    client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
 
     # Build an encrypted cookie containing a fake id_token
     fake_id_token = "fake.id.token"

@@ -1,3 +1,5 @@
+import pytest
+
 from tests.test_onboarding import WIZARD_PAYLOAD
 
 def _setup(client):
@@ -275,3 +277,56 @@ def test_transfers_list_returns_all_without_explicit_limit(client):
     r = client.get("/api/v1/transfers", params={"billing_month": "2026-03"})
     assert r.status_code == 200
     assert len(r.json()) == 55, f"Expected 55 transfers, got {len(r.json())}"
+
+
+@pytest.mark.parametrize("cascade_val", ["FUTURE", "futur", "ALL", "SINGLE", "bogus"])
+def test_update_transfer_invalid_cascade_returns_422(client, cascade_val):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    t = client.post("/api/v1/transfers", json={
+        "date": "2026-01-10", "detail": "Test", "amount": 100,
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+    }).json()
+    r = client.put(f"/api/v1/transfers/{t['id']}?cascade={cascade_val}", json={"detail": "x"})
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("cascade_val", ["FUTURE", "futur", "ALL", "SINGLE", "bogus"])
+def test_delete_transfer_invalid_cascade_returns_422(client, cascade_val):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    t = client.post("/api/v1/transfers", json={
+        "date": "2026-01-10", "detail": "Test", "amount": 100,
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+    }).json()
+    r = client.delete(f"/api/v1/transfers/{t['id']}?cascade={cascade_val}")
+    assert r.status_code == 422
+
+
+def test_create_transfer_invalid_account_type_returns_422(client):
+    _setup(client)
+    r = client.post("/api/v1/transfers", json={
+        "date": "2026-01-10", "detail": "T", "amount": 50,
+        "from_account_type": "wallet",   # invalid
+        "from_account_name": "MyBank",
+        "to_account_type": "saving",
+        "to_account_name": "MySavings",
+    })
+    assert r.status_code == 422
+
+
+def test_create_transfer_invalid_date_returns_422(client):
+    """An unparseable date string must return 422, not 500."""
+    _setup(client)
+    r = client.post("/api/v1/transfers", json={
+        "date": "not-a-date", "detail": "T", "amount": 50,
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+    })
+    assert r.status_code == 422

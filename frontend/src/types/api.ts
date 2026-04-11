@@ -168,6 +168,7 @@ export interface Forecast {
   base_year: number;
   projection_years: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface ForecastLine {
@@ -231,6 +232,7 @@ export interface OnboardingPayload {
     meal_vouchers_annual: number;
     welfare_annual: number;
     salary_months?: number;
+    manual_net_override?: number | null;
   };
 }
 

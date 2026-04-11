@@ -1,39 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
-from pydantic import BaseModel, Field
 from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.forecast import Forecast, ForecastLine, ForecastAdjustment
 from app.services.forecasting import auto_generate_lines, project_forecast
+from app.schemas.forecast import ForecastCreate, ForecastUpdate, ForecastLineCreate, AdjustmentCreate
 
 router = APIRouter(prefix="/forecasts", tags=["forecasts"])
-
-
-class ForecastCreate(BaseModel):
-    name: str
-    base_year: int
-    projection_years: int
-
-
-class ForecastUpdate(BaseModel):
-    name: Optional[str] = None
-    projection_years: Optional[int] = Field(default=None, ge=1)
-
-
-class ForecastLineCreate(BaseModel):
-    detail: str
-    base_amount: float
-    category_id: Optional[str] = None
-    payment_method_id: Optional[str] = None
-    billing_day: int = 1
-    notes: Optional[str] = None
-
-
-class AdjustmentCreate(BaseModel):
-    valid_from: str    # YYYY-MM-DD
-    new_amount: float
-    adjustment_type: str = "fixed"  # "fixed" or "percentage"
 
 
 def _forecast_detail(forecast: Forecast, db: Session) -> dict:
@@ -223,9 +196,28 @@ def update_adjustment(
     fc_id: str, line_id: str, adj_id: str, req: AdjustmentCreate,
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    adj = db.query(ForecastAdjustment).filter_by(id=adj_id, forecast_line_id=line_id, user_id=current_user.id).first()
+    # Verify ownership chain: adj → line → forecast (prevents IDOR across user's own forecasts)
+    fc = db.query(Forecast).filter_by(id=fc_id, user_id=current_user.id).first()
+    if not fc:
+        raise HTTPException(404, "Not found")
+    adj = (
+        db.query(ForecastAdjustment)
+        .join(ForecastLine, ForecastAdjustment.forecast_line_id == ForecastLine.id)
+        .filter(
+            ForecastAdjustment.id == adj_id,
+            ForecastAdjustment.forecast_line_id == line_id,
+            ForecastLine.forecast_id == fc_id,
+            ForecastAdjustment.user_id == current_user.id,
+        )
+        .first()
+    )
     if not adj:
         raise HTTPException(404, "Not found")
+    # Validate valid_from is within projection period (same check as add_adjustment)
+    end_date = f"{fc.base_year + fc.projection_years:04d}-12-01"
+    start_date = f"{fc.base_year + 1:04d}-01-01"
+    if not (start_date <= req.valid_from <= end_date):
+        raise HTTPException(422, f"valid_from must be between {start_date} and {end_date}")
     adj.valid_from = req.valid_from
     adj.new_amount = req.new_amount
     adj.adjustment_type = req.adjustment_type
@@ -239,7 +231,20 @@ def delete_adjustment(
     fc_id: str, line_id: str, adj_id: str,
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    adj = db.query(ForecastAdjustment).filter_by(id=adj_id, forecast_line_id=line_id, user_id=current_user.id).first()
+    fc = db.query(Forecast).filter_by(id=fc_id, user_id=current_user.id).first()
+    if not fc:
+        raise HTTPException(404, "Not found")
+    adj = (
+        db.query(ForecastAdjustment)
+        .join(ForecastLine, ForecastAdjustment.forecast_line_id == ForecastLine.id)
+        .filter(
+            ForecastAdjustment.id == adj_id,
+            ForecastAdjustment.forecast_line_id == line_id,
+            ForecastLine.forecast_id == fc_id,
+            ForecastAdjustment.user_id == current_user.id,
+        )
+        .first()
+    )
     if not adj:
         raise HTTPException(404, "Not found")
     db.delete(adj)

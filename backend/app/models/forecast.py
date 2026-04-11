@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Numeric, Integer, Text, ForeignKey, DateTime, func
+from sqlalchemy import String, Numeric, Integer, Text, ForeignKey, DateTime, CheckConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models.user import gen_uuid
@@ -55,3 +55,7 @@ class ForecastAdjustment(Base):
     valid_from: Mapped[str] = mapped_column(String(10))
     new_amount: Mapped[float] = mapped_column(Numeric(12, 2))
     adjustment_type: Mapped[str] = mapped_column(String(20), default="fixed", server_default="fixed")
+
+    __table_args__ = (
+        CheckConstraint("adjustment_type IN ('fixed', 'percentage')", name="ck_adjustment_type"),
+    )

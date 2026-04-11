@@ -137,3 +137,14 @@ def test_year_summary_transfers_in_bank(client):
     # Other months should have zero transfers_in_bank
     january = next(m for m in months if m["month"] == 1)
     assert january["transfers_in_bank"] == pytest.approx(0.0)
+
+
+def test_monthly_summary_returns_stamp_duty_field(client):
+    """
+    monthly_summary must return a stamp_duty field of type float.
+    """
+    _setup(client)
+    r = client.get("/api/v1/summary/2026/1")
+    assert r.status_code == 200
+    assert "stamp_duty" in r.json()
+    assert isinstance(r.json()["stamp_duty"], float)

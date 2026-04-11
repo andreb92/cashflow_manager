@@ -60,6 +60,8 @@ def test_oidc_login_redirects(oidc_client):
 def test_oidc_logout_reads_id_token_from_cookie(oidc_client):
     """oidc_id_token must be read from the cookie jar, not as a URL query parameter."""
     from unittest.mock import patch
+    # Register and login to be authenticated
+    oidc_client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     discovery = {
         "authorization_endpoint": "https://example.com/auth",
         "token_endpoint": "https://example.com/token",
@@ -151,6 +153,8 @@ def test_oidc_callback_links_oidc_sub_to_existing_email_user(oidc_client):
 def test_oidc_logout_corrupted_cookie_redirects_to_login(oidc_client):
     """oidc_logout with an undecryptable cookie must redirect to /login."""
     from unittest.mock import patch, AsyncMock
+    # Register and login to be authenticated
+    oidc_client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     discovery = {"end_session_endpoint": "https://example.com/logout"}
     oidc_client.cookies.set("oidc_id_token", "totally-corrupt-value")
     with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)):
@@ -164,6 +168,8 @@ def test_oidc_logout_discover_exception_redirects_to_login(oidc_client):
     """oidc_logout must fall back to /login redirect when discover_endpoints raises."""
     from unittest.mock import patch, AsyncMock
     from app.services.oidc import encrypt_cookie
+    # Register and login to be authenticated
+    oidc_client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     encrypted = encrypt_cookie("id-token", "a" * 64)
     oidc_client.cookies.set("oidc_id_token", encrypted)
     with patch("app.services.oidc.discover_endpoints", AsyncMock(side_effect=Exception("network"))):
@@ -245,3 +251,12 @@ def test_get_userinfo_calls_userinfo_endpoint():
         timeout=10,
     )
     assert result["sub"] == "u1"
+
+
+def test_oidc_logout_requires_auth(client):
+    """OIDC logout must reject unauthenticated requests with 401.
+    Uses client (not oidc_client) because oidc_logout enforces auth
+    regardless of whether OIDC is enabled — get_current_user fires first.
+    """
+    r = client.get("/api/v1/auth/oidc/logout")
+    assert r.status_code == 401

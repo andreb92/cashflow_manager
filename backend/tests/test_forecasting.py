@@ -464,3 +464,68 @@ def test_update_forecast_trims_out_of_range_adjustments(client):
 
     assert "2028-01-01" in adj_dates, "In-range adjustment must be kept"
     assert "2029-06-01" not in adj_dates, "Out-of-range adjustment must be deleted"
+
+
+def _make_two_forecasts(client):
+    """Helper: set up Alice's account, create two forecasts A and B.
+    Returns (fc_a_id, fc_b_id, line_a_id, adj_a_id).
+    """
+    _setup(client)
+    fc_a = client.post("/api/v1/forecasts", json={"name": "A", "base_year": 2026, "projection_years": 2}).json()
+    fc_b = client.post("/api/v1/forecasts", json={"name": "B", "base_year": 2026, "projection_years": 2}).json()
+    fc_a_id = fc_a["id"]
+    fc_b_id = fc_b["id"]
+    line_a_id = fc_a["lines"][0]["id"]
+    # Create adjustment on forecast A's line
+    adj_resp = client.post(
+        f"/api/v1/forecasts/{fc_a_id}/lines/{line_a_id}/adjustments",
+        json={"valid_from": "2027-06-01", "new_amount": 999.0}
+    )
+    assert adj_resp.status_code == 200
+    adj_a_id = adj_resp.json()["id"]
+    return fc_a_id, fc_b_id, line_a_id, adj_a_id
+
+
+def test_update_adjustment_rejects_wrong_forecast_id(client):
+    """IDOR: updating an adjustment via forecast B's URL (when adj belongs to forecast A) must return 404."""
+    fc_a_id, fc_b_id, line_a_id, adj_a_id = _make_two_forecasts(client)
+    # Attempt to update adj_a via forecast B's URL — must fail
+    r = client.put(
+        f"/api/v1/forecasts/{fc_b_id}/lines/{line_a_id}/adjustments/{adj_a_id}",
+        json={"valid_from": "2027-06-01", "new_amount": 1234.0}
+    )
+    assert r.status_code == 404
+    # Verify amount was NOT changed
+    fc_a = client.get(f"/api/v1/forecasts/{fc_a_id}").json()
+    line = next(l for l in fc_a["lines"] if l["id"] == line_a_id)
+    assert line["adjustments"][0]["new_amount"] == 999.0
+
+
+def test_update_adjustment_valid_from_outside_period_returns_422(client):
+    """update_adjustment must reject valid_from outside the forecast's projection period."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "P", "base_year": 2026, "projection_years": 2}).json()["id"]
+    line_id = client.get(f"/api/v1/forecasts/{fc_id}").json()["lines"][0]["id"]
+    adj_id = client.post(
+        f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments",
+        json={"valid_from": "2027-06-01", "new_amount": 500.0}
+    ).json()["id"]
+    # Try to move valid_from outside the 2027-2028 window
+    r = client.put(
+        f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments/{adj_id}",
+        json={"valid_from": "2030-01-01", "new_amount": 500.0}
+    )
+    assert r.status_code == 422
+
+
+def test_delete_adjustment_rejects_wrong_forecast_id(client):
+    """IDOR: deleting an adjustment via forecast B's URL (when adj belongs to forecast A) must return 404."""
+    fc_a_id, fc_b_id, line_a_id, adj_a_id = _make_two_forecasts(client)
+    r = client.delete(
+        f"/api/v1/forecasts/{fc_b_id}/lines/{line_a_id}/adjustments/{adj_a_id}"
+    )
+    assert r.status_code == 404
+    # Verify adj was NOT deleted
+    fc_a = client.get(f"/api/v1/forecasts/{fc_a_id}").json()
+    line = next(l for l in fc_a["lines"] if l["id"] == line_a_id)
+    assert len(line["adjustments"]) == 1

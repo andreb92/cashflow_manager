@@ -311,3 +311,103 @@ def test_assets_put_override_does_not_affect_other_user(client, db):
         assert alice_row.manual_override is None, (
             f"Bob's PUT leaked manual_override={alice_row.manual_override} into Alice's asset row"
         )
+
+
+# ---------------------------------------------------------------------------
+# Salary isolation
+# ---------------------------------------------------------------------------
+
+def _alice_salary(client):
+    """Register Alice, onboard, create a salary config. Returns salary_id."""
+    _register_and_onboard_alice(client)
+    # First need a tax config for the period
+    client.post("/api/v1/tax-config", json={"valid_from": "2026-01"})
+    # Tax config creation may already exist from seed — ignore 409
+    r = client.post("/api/v1/salary", json={
+        "valid_from": "2026-01",
+        "ral": 40000,
+        "employer_contrib_rate": 0.0919,
+    })
+    assert r.status_code == 200
+    return r.json()["id"]
+
+
+def test_salary_list_by_other_user_is_empty(client):
+    """Bob listing salary configs sees only his own (Alice's must not appear)."""
+    _alice_salary(client)
+    _switch_to_bob(client)
+    client.post("/api/v1/onboarding", json=_MINIMAL_ONBOARDING)
+    r = client.get("/api/v1/salary")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_salary_update_by_other_user_returns_404(client):
+    """Bob cannot update Alice's salary config."""
+    salary_id = _alice_salary(client)
+    _switch_to_bob(client)
+    r = client.put(f"/api/v1/salary/{salary_id}", json={
+        "valid_from": "2026-01", "ral": 99999, "employer_contrib_rate": 0.0
+    })
+    assert r.status_code == 404
+
+
+def test_salary_delete_by_other_user_returns_404(client):
+    """Bob cannot delete Alice's salary config."""
+    salary_id = _alice_salary(client)
+    _switch_to_bob(client)
+    assert client.delete(f"/api/v1/salary/{salary_id}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# User settings isolation
+# ---------------------------------------------------------------------------
+
+def test_user_settings_list_by_other_user_shows_only_own(client):
+    """Bob's GET /user-settings must not return Alice's settings."""
+    _register_and_onboard_alice(client)
+    # Alice sets a distinctive tracking_start_date value
+    client.put("/api/v1/user-settings", json=[{"key": "tracking_start_date", "value": "1990-01-01"}])
+
+    _switch_to_bob(client)
+    client.post("/api/v1/onboarding", json=_MINIMAL_ONBOARDING)
+    r = client.get("/api/v1/user-settings")
+    assert r.status_code == 200
+    # Alice's distinctive value must not appear in Bob's settings
+    values = {item["value"] for item in r.json()}
+    assert "1990-01-01" not in values
+    # Bob must still have his own settings
+    keys = {item["key"] for item in r.json()}
+    assert "onboarding_complete" in keys
+
+
+# ---------------------------------------------------------------------------
+# Analytics isolation
+# ---------------------------------------------------------------------------
+
+def test_analytics_does_not_return_other_user_transactions(client):
+    """Alice's transactions must not appear in Bob's analytics response."""
+    pm_id, cat_id = _register_and_onboard_alice(client)
+    client.post("/api/v1/transactions", json={
+        "date": "2026-03-15", "detail": "Alice Secret Expense", "amount": 12345.67,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    })
+
+    # Confirm Alice can see her own transaction in analytics
+    alice_r = client.get("/api/v1/analytics/categories?from=2026-01&to=2026-12")
+    assert alice_r.status_code == 200
+    alice_amounts = [row.get("total_amount", 0) for row in alice_r.json()]
+    assert any(abs(float(a) - 12345.67) < 0.01 for a in alice_amounts), (
+        "Alice's transaction should appear in her own analytics"
+    )
+
+    _switch_to_bob(client)
+    client.post("/api/v1/onboarding", json=_MINIMAL_ONBOARDING)
+    bob_r = client.get("/api/v1/analytics/categories?from=2026-01&to=2026-12")
+    assert bob_r.status_code == 200
+    # Alice's distinctive amount must not appear in Bob's analytics
+    bob_amounts = [row.get("total_amount", 0) for row in bob_r.json()]
+    assert not any(abs(float(a) - 12345.67) < 0.01 for a in bob_amounts), (
+        "Alice's transaction must not appear in Bob's analytics"
+    )

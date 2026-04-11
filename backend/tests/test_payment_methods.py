@@ -187,3 +187,9 @@ def test_pm_rename_cascades_to_transfers(client):
     assert not any(t["from_account_name"] == "MyBank" for t in transfers), \
         "Old PM name still present in transfers after rename"
 
+
+def test_create_payment_method_invalid_type_returns_422(client):
+    _setup(client)
+    r = client.post("/api/v1/payment-methods", json={"name": "X", "type": "crypto"})
+    assert r.status_code == 422
+

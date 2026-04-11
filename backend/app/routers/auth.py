@@ -7,19 +7,20 @@ from app.schemas.auth import RegisterRequest, LoginRequest, UserOut
 from app.services.auth import hash_password, verify_password, create_access_token
 from app.config import get_settings
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 COOKIE_NAME = "access_token"
 
 
 def _set_auth_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
         samesite="lax",
-        max_age=60 * 60 * 24 * get_settings().jwt_expire_days,
-        secure=not get_settings().development_mode,
+        max_age=60 * 60 * 24 * settings.jwt_expire_days,
+        secure=not settings.development_mode,
     )
 
 
@@ -148,6 +149,8 @@ async def oidc_callback(
         )
 
     sub = info.get("sub") or info.get("oid")
+    if not sub:
+        raise HTTPException(status_code=400, detail="OIDC provider did not return a subject identifier")
     email = info.get("email")
     name = info.get("name", "")
 
@@ -177,6 +180,7 @@ async def oidc_callback(
 async def oidc_logout(
     response: Response,
     oidc_id_token: Annotated[str | None, Cookie()] = None,
+    _current_user: User = Depends(get_current_user),
 ):
     settings = get_settings()
     response.delete_cookie(key=COOKIE_NAME)

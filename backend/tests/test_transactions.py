@@ -553,3 +553,45 @@ def test_delete_cascade_single_preserves_siblings(client):
     assert all_sofa[0]["id"] in remaining_ids
     assert all_sofa[2]["id"] in remaining_ids
     assert middle_id not in remaining_ids
+
+
+@pytest.mark.parametrize("cascade_val", ["FUTURE", "futur", "ALL", "SINGLE", "bogus"])
+def test_update_transaction_invalid_cascade_returns_422(client, cascade_val):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    from tests.test_onboarding import WIZARD_PAYLOAD
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    pm_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyBank")
+    tx = client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "Test", "amount": 10,
+        "payment_method_id": pm_id, "transaction_direction": "debit",
+    }).json()
+    r = client.put(f"/api/v1/transactions/{tx['id']}?cascade={cascade_val}", json={"detail": "x"})
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("cascade_val", ["FUTURE", "futur", "ALL", "SINGLE", "bogus"])
+def test_delete_transaction_invalid_cascade_returns_422(client, cascade_val):
+    client.post("/api/v1/auth/register", json={
+        "email": "alice@example.com", "password": "Password1!", "name": "Alice"
+    })
+    from tests.test_onboarding import WIZARD_PAYLOAD
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    pm_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyBank")
+    tx = client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "Test", "amount": 10,
+        "payment_method_id": pm_id, "transaction_direction": "debit",
+    }).json()
+    r = client.delete(f"/api/v1/transactions/{tx['id']}?cascade={cascade_val}")
+    assert r.status_code == 422
+
+
+def test_create_transaction_invalid_date_returns_422(client):
+    """An unparseable date string must return 422, not 500."""
+    pm_id, cat_id = _setup(client)
+    r = client.post("/api/v1/transactions", json={
+        "date": "not-a-date", "detail": "X", "amount": 10,
+        "payment_method_id": pm_id, "transaction_direction": "debit",
+    })
+    assert r.status_code == 422

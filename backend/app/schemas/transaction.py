@@ -1,7 +1,17 @@
 from __future__ import annotations
+import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Literal, Optional
+
+
+def _validate_iso_date(v: str) -> str:
+    try:
+        datetime.date.fromisoformat(v)
+    except ValueError:
+        raise ValueError(f"Invalid date format: {v!r} (expected YYYY-MM-DD)")
+    return v
+
 
 class TransactionCreate(BaseModel):
     date: str
@@ -13,6 +23,11 @@ class TransactionCreate(BaseModel):
     recurrence_months: Optional[int] = Field(None, ge=1)
     installment_total: Optional[int] = Field(None, ge=2)
     notes: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        return _validate_iso_date(v)
 
     @model_validator(mode="after")
     def check_mutually_exclusive(self):
@@ -32,3 +47,8 @@ class TransactionUpdate(BaseModel):
     amount: Optional[float] = Field(None, gt=0)
     category_id: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        return _validate_iso_date(v)
