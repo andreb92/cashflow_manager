@@ -9,8 +9,6 @@ DEFAULT_CATEGORIES = [
     ("Housing", "Bills"),
     ("Mobility", "Car"),
     ("Mobility", "Fuel"),
-    ("Bills", "Phone + Internet"),
-    ("Bills", "Bills"),
     ("Personal", "Food"),
     ("Personal", "Wellness"),
     ("Leisure", "Trip"),

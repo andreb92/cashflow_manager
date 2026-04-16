@@ -82,6 +82,38 @@ def test_get_db_yields_and_closes(tmp_path):
         get_settings.cache_clear()
 
 
+def test_sqlite_foreign_key_pragma_enforced(tmp_path):
+    """get_engine() must enable FK constraints — inserting a Category with a non-existent user_id must fail."""
+    import os
+    from sqlalchemy.exc import IntegrityError
+    from app.database import get_engine, get_session_factory, Base
+    from app.config import get_settings
+    from app.models.category import Category
+
+    db_file = str(tmp_path / "fk_pragma.db")
+    os.environ["DB_PATH"] = db_file
+    os.environ["DEVELOPMENT_MODE"] = "true"
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    get_session_factory.cache_clear()
+    try:
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        factory = get_session_factory()
+        session = factory()
+        session.add(Category(user_id="nonexistent-user-id", type="Test", sub_type="Sub"))
+        with pytest.raises(IntegrityError):
+            session.commit()
+        session.close()
+        Base.metadata.drop_all(bind=engine)
+    finally:
+        get_engine.cache_clear()
+        get_session_factory.cache_clear()
+        os.environ.pop("DB_PATH", None)
+        os.environ.pop("DEVELOPMENT_MODE", None)
+        get_settings.cache_clear()
+
+
 def test_main_lifespan_runs_alembic_migration(tmp_path):
     """When no get_db override is set, the lifespan runs Alembic migrations and seeds tax config."""
     from fastapi.testclient import TestClient

@@ -105,11 +105,17 @@ def compute_bank_balance(user_id: str, year: int, month: int, db: Session) -> fl
                 else:
                     balance -= float(tx.amount)
             elif tx.transaction_direction == "credit":
-                # Only deduct from main bank when the transaction is on a CC/revolving PM.
-                # These represent credit card statement payoffs funded from the bank account.
+                # Revolving card payoff recorded as a "credit" direction transaction.
                 # Prepaid, saving, or other PMs are not bank-funded.
                 tx_pm = pm_by_id.get(tx.payment_method_id)
                 if tx_pm and tx_pm.type in NEXT_MONTH_TYPES:
+                    balance -= float(tx.amount)
+            elif tx.transaction_direction == "debit":
+                # Credit card purchases shift to billing_month (next month).
+                # Deduct them from the bank balance in that billing month so the
+                # balance reflects the upcoming CC bill.
+                tx_pm = pm_by_id.get(tx.payment_method_id)
+                if tx_pm and tx_pm.type == "credit_card":
                     balance -= float(tx.amount)
 
         # Apply transfers for this billing month
@@ -203,6 +209,10 @@ def compute_bank_balances_for_year(user_id: str, year: int, db: Session) -> dict
                     elif tx.transaction_direction == "credit":
                         tx_pm = pm_by_id.get(tx.payment_method_id)
                         if tx_pm and tx_pm.type in NEXT_MONTH_TYPES:
+                            balance -= float(tx.amount)
+                    elif tx.transaction_direction == "debit":
+                        tx_pm = pm_by_id.get(tx.payment_method_id)
+                        if tx_pm and tx_pm.type == "credit_card":
                             balance -= float(tx.amount)
                 for t in transfers_by_month.get(month_first, []):
                     if t.from_account_name == pm.name:

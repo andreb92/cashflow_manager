@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import TransactionList from '../components/transactions/TransactionList';
 
 function buildMonthOptions() {
@@ -22,15 +23,23 @@ const MONTH_OPTIONS = buildMonthOptions();
 const YEAR_OPTIONS = buildYearOptions();
 
 export default function TransactionsPage() {
-  const now = new Date();
-  const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [searchParams] = useSearchParams();
+  // billing_month URL param arrives as "YYYY-MM-DD" (from SummaryPage); extract "YYYY-MM"
+  const billingMonthParam = searchParams.get('billing_month')?.slice(0, 7) ?? null;
 
-  const dateMonth = `${year}-${month}`;
+  const now = new Date();
+  const initDate = billingMonthParam ? new Date(billingMonthParam + '-01T00:00:00') : now;
+
+  const [year, setYear] = useState(String(initDate.getFullYear()));
+  const [month, setMonth] = useState(String(initDate.getMonth() + 1).padStart(2, '0'));
+  // Default to billing-month mode when navigated from Summary, otherwise actual-date mode
+  const [mode, setMode] = useState<'date' | 'billing'>(billingMonthParam ? 'billing' : 'date');
+
+  const yearMonth = `${year}-${month}`;
 
   return (
     <div className="max-w-3xl space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold text-primary flex-1">Transactions</h1>
         <select
           value={year}
@@ -50,8 +59,27 @@ export default function TransactionsPage() {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+        <div className="flex rounded border border-line overflow-hidden text-sm">
+          <button
+            className={`px-3 py-1 ${mode === 'date' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
+            onClick={() => setMode('date')}
+            title="Filter by the actual date the transaction occurred"
+          >
+            By date
+          </button>
+          <button
+            className={`px-3 py-1 ${mode === 'billing' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
+            onClick={() => setMode('billing')}
+            title="Filter by billing month — credit card charges appear in the month they are billed"
+          >
+            By billing month
+          </button>
+        </div>
       </div>
-      <TransactionList dateMonth={dateMonth} />
+      <TransactionList
+        dateMonth={mode === 'date' ? yearMonth : undefined}
+        billingMonth={mode === 'billing' ? yearMonth : undefined}
+      />
     </div>
   );
 }

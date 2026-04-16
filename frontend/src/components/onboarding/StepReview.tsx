@@ -15,7 +15,7 @@ export default function StepReview() {
   const { mutate, isPending } = useMutation({
     mutationFn: () => onboardingApi.submit(data as OnboardingPayload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['onboarding', 'status'] });
+      qc.setQueryData(['onboarding', 'status'], { complete: true });
       navigate('/');
     },
     onError: () => setError('Submission failed. Please try again.'),

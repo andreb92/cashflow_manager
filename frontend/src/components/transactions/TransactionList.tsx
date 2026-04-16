@@ -11,18 +11,22 @@ import { Button } from '../ui/Button';
 import type { Transaction } from '../../types/api';
 
 interface Props {
-  dateMonth: string;
+  dateMonth?: string;
+  billingMonth?: string;
 }
 
-export default function TransactionList({ dateMonth }: Props) {
+export default function TransactionList({ dateMonth, billingMonth }: Props) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [editTx, setEditTx] = useState<Transaction | null>(null);
   const [deleteTx, setDeleteTx] = useState<Transaction | null>(null);
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ['transactions', dateMonth],
-    queryFn: () => transactionsApi.list({ date_month: dateMonth }),
+    queryKey: ['transactions', billingMonth ? 'billing' : 'date', billingMonth ?? dateMonth],
+    queryFn: () =>
+      billingMonth
+        ? transactionsApi.list({ billing_month: billingMonth })
+        : transactionsApi.list({ date_month: dateMonth }),
   });
   const { data: methods = [] } = useQuery({ queryKey: ['payment-methods'], queryFn: () => paymentMethodsApi.list(false) });
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list(false) });

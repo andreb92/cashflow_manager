@@ -110,6 +110,46 @@ test('TransactionsPage delete button opens cascade modal with recurring options 
   expect(screen.getByRole('button', { name: /this one only/i })).toBeInTheDocument();
 });
 
+test('TransactionsPage shows By date and By billing month toggle buttons', async () => {
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Grocery run')).toBeInTheDocument());
+  expect(screen.getByRole('button', { name: /by date/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /by billing month/i })).toBeInTheDocument();
+});
+
+test('TransactionsPage defaults to billing mode when billing_month URL param is present', async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/transactions?billing_month=2026-05-01']}>
+        <AuthProvider><TransactionsPage /></AuthProvider>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  await waitFor(() => expect(screen.getByText('Grocery run')).toBeInTheDocument());
+  const billingBtn = screen.getByRole('button', { name: /by billing month/i });
+  expect(billingBtn.className).toContain('bg-blue-600');
+  const dateBtn = screen.getByRole('button', { name: /by date/i });
+  expect(dateBtn.className).not.toContain('bg-blue-600');
+});
+
+test('TransactionRow shows billing annotation when billing_month differs from date month', async () => {
+  server.use(
+    http.get('/api/v1/transactions', () =>
+      HttpResponse.json([{
+        id: 'tx-cc', user_id: 'u1', date: '2026-01-15', detail: 'CC Dinner',
+        amount: 80, payment_method_id: 'pm1', category_id: null,
+        transaction_direction: 'debit', billing_month: '2026-02-01',
+        recurrence_months: null, installment_total: null, installment_index: null,
+        parent_transaction_id: null, notes: null, created_at: '', updated_at: '',
+      }])
+    )
+  );
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('CC Dinner')).toBeInTheDocument());
+  expect(screen.getByText(/billed 2026-02/)).toBeInTheDocument();
+});
+
 test('TransactionForm shows billing hint for credit_card payment method', async () => {
   const user = userEvent.setup();
   render(<TransactionsPage />, { wrapper });

@@ -26,7 +26,14 @@ export default function TransactionRow({ tx, method, category, onEdit, onDelete 
           )}
         </div>
         <div className="text-muted text-xs mt-0.5">
-          {tx.date} · {method?.name ?? tx.payment_method_id} · {category ? `${category.type}/${category.sub_type}` : ''}
+          {tx.date}
+          {tx.billing_month !== tx.date.slice(0, 7) + '-01' && (
+            <span className="text-blue-500 ml-1" title="Credit card: billed in a different month">
+              → billed {tx.billing_month.slice(0, 7)}
+            </span>
+          )}
+          {' · '}{method?.name ?? tx.payment_method_id}
+          {' · '}{category ? `${category.type}/${category.sub_type}` : ''}
         </div>
       </div>
       <Badge color={directionColor}>

@@ -385,3 +385,87 @@ def test_compute_bank_balances_for_year_debit_and_transfers(_standalone_db, make
     assert result[2] == pytest.approx(1450.0)   # 1600 - 150 (CC credit)
     assert result[3] == pytest.approx(1250.0)   # 1450 - 200
     assert result[4] == pytest.approx(1350.0)   # 1250 + 100
+
+
+def test_bank_balance_cc_debit_reduces_bank_in_billing_month(_standalone_db, make_user):
+    """
+    CC purchases (direction='debit') are billed to the next month. The bank balance
+    must be reduced in billing_month, not in the transaction's date month.
+    This covers the fix where debit-direction credit_card transactions were previously ignored.
+    """
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="cc_debit_balance@test.com")
+    db = _standalone_db
+
+    bank_pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    cc_pm = PaymentMethod(user_id=user.id, name="MyCC", type="credit_card", is_main_bank=False)
+    db.add_all([bank_pm, cc_pm])
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Personal", sub_type="Food")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=bank_pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    # CC purchase in January — billing shifts to February
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-20", detail="CC Purchase",
+        amount=200, payment_method_id=cc_pm.id, category_id=cat.id,
+        transaction_direction="debit", billing_month="2026-02-01",
+    ))
+    db.commit()
+
+    # January: CC debit is billed in Feb, Jan balance is unaffected
+    assert compute_bank_balance(user.id, 2026, 1, db) == pytest.approx(1000.0)
+    # February: CC bill deducted from bank balance
+    assert compute_bank_balance(user.id, 2026, 2, db) == pytest.approx(800.0)
+
+
+def test_compute_bank_balances_for_year_cc_debit_reduces_bank_in_billing_month(_standalone_db, make_user):
+    """
+    Same as above but for compute_bank_balances_for_year: CC debit in Jan (billing Feb)
+    must appear in the year result as a deduction in February.
+    """
+    from app.services.bank_balance import compute_bank_balances_for_year
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="cc_debit_year@test.com")
+    db = _standalone_db
+
+    bank_pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    cc_pm = PaymentMethod(user_id=user.id, name="MyCC", type="credit_card", is_main_bank=False)
+    db.add_all([bank_pm, cc_pm])
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Personal", sub_type="Food")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=bank_pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-20", detail="CC Purchase",
+        amount=200, payment_method_id=cc_pm.id, category_id=cat.id,
+        transaction_direction="debit", billing_month="2026-02-01",
+    ))
+    db.commit()
+
+    result = compute_bank_balances_for_year(user.id, 2026, db)
+    assert result[1] == pytest.approx(1000.0)  # Jan unaffected
+    assert result[2] == pytest.approx(800.0)   # Feb: 1000 - 200
+    assert result[3] == pytest.approx(800.0)   # Mar onwards unchanged

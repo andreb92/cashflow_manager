@@ -83,6 +83,7 @@ def test_onboarding_seeds_default_categories(client, db):
     types = {c.type for c in cats}
     assert "Housing" in types
     assert "Salary" in types
+    assert "Bills" not in types, "Bills must not be a top-level category type"
 
 def test_onboarding_idempotent_returns_200(client):
     client.post("/api/v1/auth/register", json={
