@@ -4,8 +4,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { Button } from '../ui/Button';
 
 const links = [
-  { to: '/summary', label: 'Summary' },
   { to: '/', label: 'Dashboard' },
+  { to: '/summary', label: 'Summary' },
   { to: '/transactions', label: 'Transactions' },
   { to: '/transfers', label: 'Transfers' },
   { to: '/assets', label: 'Assets' },

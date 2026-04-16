@@ -55,6 +55,7 @@ def test_oidc_login_redirects(oidc_client):
         resp = oidc_client.get("/api/v1/auth/oidc/login")
     assert resp.status_code in (302, 307)
     assert "https://example.com/auth" in resp.headers["location"]
+    assert "nonce=" in resp.headers["location"]
 
 
 def test_oidc_logout_reads_id_token_from_cookie(oidc_client):
@@ -109,27 +110,33 @@ def test_oidc_callback_creates_new_user(oidc_client):
         "end_session_endpoint": "https://example.com/logout",
     }
     tokens = {"access_token": "at-123", "id_token": "it-abc"}
-    userinfo = {"sub": "sub-new-user", "email": "oidcnew@example.com", "name": "New User"}
+    userinfo = {"sub": "sub-new-user", "email": "oidcnew@example.com", "name": "New User", "email_verified": True}
 
     oidc_client.cookies.set("oidc_state", "test-state-value")
+    oidc_client.cookies.set("oidc_nonce", "test-nonce")
     with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
          patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
-         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)):
+         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
+         patch("app.routers.auth._pyjwt.decode", return_value={"nonce": "test-nonce"}):
         resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=test-state-value")
     oidc_client.cookies.delete("oidc_state")
+    oidc_client.cookies.delete("oidc_nonce")
 
     assert resp.status_code in (200, 302, 307)
 
 
-def test_oidc_callback_links_oidc_sub_to_existing_email_user(oidc_client):
-    """Callback must set oidc_sub on a user that was found by email but had no oidc_sub."""
+def test_oidc_callback_does_not_link_to_existing_email_user(oidc_client):
+    """Callback must NOT attach oidc_sub to a pre-existing password-auth account (account-takeover prevention)."""
     from unittest.mock import patch, AsyncMock
+    from app.models.user import User as UserModel
 
-    # Pre-seed a user via basic-auth register (oidc_sub will be None)
-    oidc_client.post(
+    # Pre-seed a password-auth user (oidc_sub will be None)
+    reg_resp = oidc_client.post(
         "/api/v1/auth/register",
         json={"email": "link@example.com", "password": "pass1234", "name": "Link"},
     )
+    assert reg_resp.status_code == 200
+    original_user_id = reg_resp.json()["id"]
 
     discovery = {
         "authorization_endpoint": "https://example.com/auth",
@@ -137,17 +144,92 @@ def test_oidc_callback_links_oidc_sub_to_existing_email_user(oidc_client):
         "userinfo_endpoint": "https://example.com/userinfo",
     }
     tokens = {"access_token": "at-xyz"}
-    # Same email as registered above — no oidc_sub on that user yet
-    userinfo = {"sub": "sub-link-new", "email": "link@example.com", "name": "Link"}
+    # Same email as registered above — provider returns email_verified: True
+    userinfo = {"sub": "sub-link-new", "email": "link@example.com", "name": "Link", "email_verified": True}
 
     oidc_client.cookies.set("oidc_state", "link-state")
+    # No id_token in tokens so nonce check is skipped
     with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
          patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
          patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)):
         resp = oidc_client.get("/api/v1/auth/oidc/callback?code=code&state=link-state")
     oidc_client.cookies.delete("oidc_state")
 
+    # The callback should succeed (new OIDC user created, email set to None due to collision)
     assert resp.status_code in (200, 302, 307)
+
+    # The original password-auth user must NOT have gained an oidc_sub
+    login_resp = oidc_client.post(
+        "/api/v1/auth/login",
+        json={"email": "link@example.com", "password": "pass1234"},
+    )
+    assert login_resp.status_code == 200
+    me_resp = oidc_client.get("/api/v1/auth/me")
+    assert me_resp.json()["id"] == original_user_id
+    assert me_resp.json()["has_oidc"] is False
+
+
+def test_oidc_callback_rejects_unverified_email(oidc_client):
+    """When email_verified is False the created user must have email=None."""
+    from unittest.mock import patch, AsyncMock
+    from app.models.user import User as UserModel
+    from app.deps import get_db as _get_db
+    from app.main import app as _app
+
+    discovery = {
+        "authorization_endpoint": "https://example.com/auth",
+        "token_endpoint": "https://example.com/token",
+        "userinfo_endpoint": "https://example.com/userinfo",
+    }
+    tokens = {"access_token": "at-unverified"}
+    userinfo = {"sub": "sub-unverified", "email": "unverified@example.com", "name": "Unverified", "email_verified": False}
+
+    oidc_client.cookies.set("oidc_state", "unverified-state")
+    with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
+         patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
+         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)):
+        resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=unverified-state")
+    oidc_client.cookies.delete("oidc_state")
+
+    assert resp.status_code in (200, 302, 307)
+
+    # Verify the created OIDC user has no email by querying via the DB override
+    db_gen = _app.dependency_overrides[_get_db]()
+    db = next(db_gen)
+    try:
+        oidc_user = db.query(UserModel).filter_by(oidc_sub="sub-unverified").first()
+        assert oidc_user is not None
+        assert oidc_user.email is None
+    finally:
+        try:
+            next(db_gen)
+        except StopIteration:
+            pass
+
+
+def test_oidc_callback_invalid_nonce_rejected(oidc_client):
+    """Callback with a nonce mismatch between cookie and ID token must return 400."""
+    from unittest.mock import patch, AsyncMock
+
+    discovery = {
+        "authorization_endpoint": "https://example.com/auth",
+        "token_endpoint": "https://example.com/token",
+        "userinfo_endpoint": "https://example.com/userinfo",
+    }
+    tokens = {"access_token": "at-nonce", "id_token": "it-nonce"}
+    userinfo = {"sub": "sub-nonce", "email": "nonce@example.com", "name": "Nonce", "email_verified": True}
+
+    oidc_client.cookies.set("oidc_state", "nonce-state")
+    oidc_client.cookies.set("oidc_nonce", "correct-nonce")
+    with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
+         patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
+         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
+         patch("app.routers.auth._pyjwt.decode", return_value={"nonce": "wrong-nonce"}):
+        resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=nonce-state")
+    oidc_client.cookies.delete("oidc_state")
+    oidc_client.cookies.delete("oidc_nonce")
+
+    assert resp.status_code == 400
 
 
 def test_oidc_logout_corrupted_cookie_redirects_to_login(oidc_client):

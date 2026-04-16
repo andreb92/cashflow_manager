@@ -52,23 +52,24 @@ def compute_assets(user_id: str, year: int, db: Session) -> List[AssetRow]:
     transfers_in: dict = defaultdict(float)
     transfers_out: dict = defaultdict(float)
     for t in year_transfers:
-        transfers_in[t.to_account_name] += float(t.amount)
-        transfers_out[t.from_account_name] += float(t.amount)
+        transfers_in[(t.to_account_type, t.to_account_name)] += float(t.amount)
+        transfers_out[(t.from_account_type, t.from_account_name)] += float(t.amount)
 
-    def _transfer_balance(opening: float, account_name: str) -> float:
-        return opening + transfers_in.get(account_name, 0.0) - transfers_out.get(account_name, 0.0)
+    def _transfer_balance(opening: float, account_type: str, account_name: str) -> float:
+        key = (account_type, account_name)
+        return opening + transfers_in.get(key, 0.0) - transfers_out.get(key, 0.0)
 
     # Saving accounts
     for key, value in settings.items():
         if key.startswith("opening_saving_balance_"):
             name = key[len("opening_saving_balance_"):]
-            rows.append(_make_row("saving", name, _transfer_balance(float(value), name)))
+            rows.append(_make_row("saving", name, _transfer_balance(float(value), "saving", name)))
 
     # Investment accounts
     for key, value in settings.items():
         if key.startswith("opening_investment_balance_"):
             name = key[len("opening_investment_balance_"):]
-            rows.append(_make_row("investment", name, _transfer_balance(float(value), name)))
+            rows.append(_make_row("investment", name, _transfer_balance(float(value), "investment", name)))
 
     # Pension (employer + voluntary contrib × RAL × months_elapsed / 12)
     salary_cfgs = (

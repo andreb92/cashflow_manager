@@ -11,7 +11,6 @@ import { Button } from '../ui/Button';
 import type { Transaction, PaymentMethod } from '../../types/api';
 
 const NEXT_MONTH_TYPES: PaymentMethod['type'][] = ['credit_card', 'revolving'];
-const INSTALLMENT_TYPES: PaymentMethod['type'][] = ['credit_card', 'revolving'];
 
 const ALL_DIRECTIONS = [
   { value: 'debit', label: 'Expense' },
@@ -43,7 +42,6 @@ interface Fields {
   category_id: string;
   transaction_direction: Transaction['transaction_direction'];
   recurrence_months: string;
-  installment_total: string;
   notes: string;
 }
 
@@ -57,10 +55,8 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [editCascade, setEditCascade] = useState<'single' | 'all' | 'future'>('single');
 
-  // Recurrence/installment radio state
-  type RecurType = 'none' | 'recurring' | 'installments';
+  type RecurType = 'none' | 'recurring';
   const initRecurType = (): RecurType => {
-    if (initial?.installment_total) return 'installments';
     if (initial?.recurrence_months) return 'recurring';
     return 'none';
   };
@@ -76,7 +72,6 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
           amount: String(initial.amount),
           category_id: initial.category_id ?? '',
           recurrence_months: String(initial.recurrence_months ?? ''),
-          installment_total: String(initial.installment_total ?? ''),
           notes: initial.notes ?? '',
         }
       : { transaction_direction: 'debit', date: format(new Date(), 'yyyy-MM-dd') },
@@ -88,7 +83,6 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
   const selectedMethodId = watch('payment_method_id');
   const selectedMethod = methods.find((m) => m.id === selectedMethodId);
   const isNextMonth = selectedMethod && NEXT_MONTH_TYPES.includes(selectedMethod.type);
-  const isInstallmentEligible = selectedMethod ? INSTALLMENT_TYPES.includes(selectedMethod.type) : false;
   const availableDirections = directionsForType(selectedMethod?.type);
   const directionIsFixed = availableDirections.length === 1;
 
@@ -128,17 +122,9 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
     .filter((c) => c.type === selectedType)
     .map((c) => ({ value: c.id, label: c.sub_type }));
 
-  // Handle recurType change: clear the irrelevant field
   function handleRecurTypeChange(next: RecurType) {
     setRecurType(next);
-    if (next === 'none') {
-      setValue('recurrence_months', '');
-      setValue('installment_total', '');
-    } else if (next === 'recurring') {
-      setValue('installment_total', '');
-    } else if (next === 'installments') {
-      setValue('recurrence_months', '');
-    }
+    if (next === 'none') setValue('recurrence_months', '');
   }
 
   const { mutate, isPending } = useMutation({
@@ -151,7 +137,6 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
         category_id: data.category_id,
         transaction_direction: data.transaction_direction,
         ...(data.recurrence_months ? { recurrence_months: parseInt(data.recurrence_months) } : {}),
-        ...(data.installment_total ? { installment_total: parseInt(data.installment_total) } : {}),
         ...(data.notes ? { notes: data.notes } : {}),
       };
       return initial
@@ -250,7 +235,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
         />
       )}
 
-      {/* Recurrence / Installments radio toggle */}
+      {/* Recurrence radio toggle */}
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-secondary">Recurrence</span>
         <div className="flex flex-wrap gap-2 items-center">
@@ -280,33 +265,12 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
           {recurType === 'recurring' && (
             <span className="text-sm text-secondary">months</span>
           )}
-          {isInstallmentEligible && (
-            <button
-              type="button"
-              className={`${radioBase} ${recurType === 'installments' ? radioActive : radioInactive}`}
-              onClick={() => handleRecurTypeChange('installments')}
-            >
-              Installments: split into
-            </button>
-          )}
-          {isInstallmentEligible && recurType === 'installments' && (
-            <input
-              type="number"
-              min="2"
-              placeholder="count"
-              className="border rounded px-2 py-1.5 text-sm bg-elevated text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 border-line-strong w-24"
-              {...register('installment_total')}
-            />
-          )}
         </div>
         <p className="text-xs text-faint">
           {recurType === 'recurring' && 'Creates a copy of this transaction for each of the next N months.'}
-          {recurType === 'installments' && 'Splits the total amount evenly across N consecutive billing months.'}
           {recurType === 'none' && 'One-off transaction with no repetition.'}
         </p>
-        {/* Hidden inputs keep the fields registered with RHF when the visible inputs are not shown */}
         {recurType !== 'recurring' && <input type="hidden" {...register('recurrence_months')} />}
-        {recurType !== 'installments' && <input type="hidden" {...register('installment_total')} />}
       </div>
 
       <Input label="Notes" type="text" hint="Optional free-text notes for this transaction." {...register('notes')} />

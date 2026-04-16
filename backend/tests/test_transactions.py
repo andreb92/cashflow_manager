@@ -44,31 +44,6 @@ def test_create_recurrence_generates_n_transactions(client):
     all_gym = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Gym"]
     assert len(all_gym) == 6
 
-def test_create_installments_for_revolving(client):
-    pm_id, cat_id = _setup(client)
-    # Create a revolving payment method for this test
-    r = client.post("/api/v1/payment-methods", json={"name": "Findomestic", "type": "revolving"})
-    revolving_id = r.json()["id"]
-    r = client.post("/api/v1/transactions", json={
-        "date": "2026-03-01", "detail": "Sofa", "amount": 900,
-        "payment_method_id": revolving_id, "category_id": cat_id,
-        "transaction_direction": "debit", "installment_total": 3,
-    })
-    assert r.status_code == 200
-    children = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sofa"]
-    assert len(children) == 3
-    assert sum(float(t["amount"]) for t in children) == pytest.approx(900.0, abs=0.01)
-
-def test_recurrence_and_installment_mutually_exclusive(client):
-    pm_id, cat_id = _setup(client)
-    r = client.post("/api/v1/transactions", json={
-        "date": "2026-03-01", "detail": "X", "amount": 100,
-        "payment_method_id": pm_id, "category_id": cat_id,
-        "transaction_direction": "debit",
-        "recurrence_months": 3, "installment_total": 3,
-    })
-    assert r.status_code == 422
-
 def test_delete_single(client):
     pm_id, cat_id = _setup(client)
     tx_id = client.post("/api/v1/transactions", json={
@@ -152,41 +127,6 @@ def test_create_transaction_invalid_payment_method(client):
         "transaction_direction": "debit",
     })
     assert r.status_code == 422
-
-
-# --- Installment tests ---
-
-def test_create_installment_transaction_on_non_revolving_422(client):
-    pm_id, cat_id = _setup(client)
-    # MyBank is a bank type, not revolving — installments should be rejected
-    r = client.post("/api/v1/transactions", json={
-        "date": "2026-03-01", "detail": "TV", "amount": 600,
-        "payment_method_id": pm_id, "category_id": cat_id,
-        "transaction_direction": "debit", "installment_total": 3,
-    })
-    assert r.status_code == 422
-
-
-def test_create_installment_transaction_splits_correctly(client):
-    pm_id, cat_id = _setup(client)
-    r = client.post("/api/v1/payment-methods", json={"name": "MyCredit", "type": "revolving"})
-    revolving_id = r.json()["id"]
-    r = client.post("/api/v1/transactions", json={
-        "date": "2026-03-01", "detail": "Laptop", "amount": 300,
-        "payment_method_id": revolving_id, "category_id": cat_id,
-        "transaction_direction": "debit", "installment_total": 3,
-    })
-    assert r.status_code == 200
-    parent = r.json()
-    parent_id = parent["id"]
-    # Parent + 2 children = 3 installments total
-    all_laptop = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Laptop"]
-    assert len(all_laptop) == 3
-    assert sum(float(t["amount"]) for t in all_laptop) == pytest.approx(300.0, abs=0.01)
-    # Children linked to parent via parent_id filter
-    children = client.get("/api/v1/transactions", params={"parent_id": parent_id}).json()
-    assert len(children) == 2
-    assert all(t["installment_total"] == 3 for t in children)
 
 
 # --- GET single transaction 404 ---
@@ -520,39 +460,6 @@ def test_update_transaction_plain_single(client):
     # Other fields unchanged
     assert updated["detail"] == "SingleUpdate"
     assert updated["payment_method_id"] == pm_id
-
-
-def test_delete_cascade_single_preserves_siblings(client):
-    """Deleting the middle installment with cascade=single keeps the other 2 siblings."""
-    pm_id, cat_id = _setup(client)
-    # Create a revolving PM to support installments
-    rev_id = client.post("/api/v1/payment-methods", json={"name": "RevCard", "type": "revolving"}).json()["id"]
-    parent = client.post("/api/v1/transactions", json={
-        "date": "2026-03-01", "detail": "Sofa3", "amount": 300,
-        "payment_method_id": rev_id, "category_id": cat_id,
-        "transaction_direction": "debit", "installment_total": 3,
-    }).json()
-    parent_id = parent["id"]
-
-    # Fetch all 3 (parent + 2 children) sorted by billing_month
-    all_sofa = sorted(
-        [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sofa3"],
-        key=lambda t: t["billing_month"],
-    )
-    assert len(all_sofa) == 3
-
-    # Delete the middle one (index 1)
-    middle_id = all_sofa[1]["id"]
-    r = client.delete(f"/api/v1/transactions/{middle_id}", params={"cascade": "single"})
-    assert r.status_code == 200
-
-    # The other two must still exist
-    remaining = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sofa3"]
-    remaining_ids = {t["id"] for t in remaining}
-    assert len(remaining) == 2
-    assert all_sofa[0]["id"] in remaining_ids
-    assert all_sofa[2]["id"] in remaining_ids
-    assert middle_id not in remaining_ids
 
 
 @pytest.mark.parametrize("cascade_val", ["FUTURE", "futur", "ALL", "SINGLE", "bogus"])

@@ -15,7 +15,7 @@ node_modules/
 frontend/dist/
 frontend/coverage/
 data/*.db
-deploy/data/*.db
+deploy/data/*.db*
 /package.json
 e2e/playwright-report/
 e2e/test-results/

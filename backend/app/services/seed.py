@@ -17,10 +17,7 @@ DEFAULT_CATEGORIES = [
     ("Leisure", "Gifts"),
     ("Salary", "Income"),
     ("Saving", "Saving"),
-    ("Saving", "Transfer"),
     ("Saving", "Investments"),
-    ("Saving", "Inv-Transfer"),
-    ("Saving", "Inv-Outcome"),
 ]
 
 TAX_2026 = {

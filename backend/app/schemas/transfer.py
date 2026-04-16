@@ -22,7 +22,7 @@ class TransferCreate(BaseModel):
     from_account_name: str
     to_account_type: AccountType
     to_account_name: str
-    recurrence_months: Optional[int] = None
+    recurrence_months: Optional[int] = Field(None, ge=1, le=60)
     notes: Optional[str] = None
 
     @field_validator("date")

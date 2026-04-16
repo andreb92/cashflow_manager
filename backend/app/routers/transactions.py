@@ -8,7 +8,6 @@ from app.models.payment_method import PaymentMethod
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.billing import billing_month
 from app.services.recurrence import expand_recurrence
-from app.services.installments import expand_installments
 from decimal import Decimal
 from dateutil.parser import parse as parse_date
 
@@ -53,38 +52,6 @@ def create_transaction(
     db: Session = Depends(get_db),
 ):
     pm = _get_pm(db, req.payment_method_id, current_user.id)
-
-    if req.installment_total:
-        if pm.type not in ("revolving", "credit_card"):
-            raise HTTPException(422, "Installments only supported for credit card and revolving payment methods")
-        tx_date = parse_date(req.date).date()
-        installments = expand_installments(Decimal(str(req.amount)), tx_date, req.installment_total)
-        parent = Transaction(
-            user_id=current_user.id, date=req.date, detail=req.detail,
-            amount=req.amount, payment_method_id=req.payment_method_id,
-            category_id=req.category_id, transaction_direction=req.transaction_direction,
-            billing_month=str(installments[0]["billing_month"]),
-            installment_total=req.installment_total, installment_index=1, notes=req.notes,
-        )
-        db.add(parent)
-        db.flush()
-        # overwrite parent with first installment amount, add rest as children
-        parent.amount = float(installments[0]["amount"])
-        for inst in installments[1:]:
-            db.add(Transaction(
-                user_id=current_user.id, date=req.date, detail=req.detail,
-                amount=float(inst["amount"]),
-                payment_method_id=req.payment_method_id, category_id=req.category_id,
-                transaction_direction=req.transaction_direction,
-                billing_month=str(inst["billing_month"]),
-                installment_total=req.installment_total,
-                installment_index=inst["installment_index"],
-                parent_transaction_id=parent.id,
-                notes=req.notes,
-            ))
-        db.commit()
-        db.refresh(parent)
-        return parent
 
     if req.recurrence_months:
         tx_date = parse_date(req.date).date()

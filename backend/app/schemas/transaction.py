@@ -1,7 +1,7 @@
 from __future__ import annotations
 import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 
 
@@ -20,20 +20,13 @@ class TransactionCreate(BaseModel):
     payment_method_id: str
     category_id: Optional[str] = None
     transaction_direction: Literal['income', 'debit', 'credit']
-    recurrence_months: Optional[int] = Field(None, ge=1)
-    installment_total: Optional[int] = Field(None, ge=2)
+    recurrence_months: Optional[int] = Field(None, ge=1, le=60)
     notes: Optional[str] = None
 
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: str) -> str:
         return _validate_iso_date(v)
-
-    @model_validator(mode="after")
-    def check_mutually_exclusive(self):
-        if self.recurrence_months and self.installment_total:
-            raise ValueError("recurrence_months and installment_total are mutually exclusive")
-        return self
 
 class TransactionUpdate(BaseModel):
     # NOTE: payment_method_id is intentionally omitted from this schema.

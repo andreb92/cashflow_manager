@@ -1,6 +1,6 @@
 """add indexes, transfer updated_at, adjustment_type constraint
 
-Revision ID: 21661cf2e204
+Revision ID: 004
 Revises: 003
 Create Date: 2026-04-11 09:50:45.059169
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '21661cf2e204'
+revision: str = '004'
 down_revision: Union[str, Sequence[str], None] = '003'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
