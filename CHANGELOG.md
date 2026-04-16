@@ -1,3 +1,11 @@
+## [1.2.4](https://github.com/soulwaxx/cashflow_manager/compare/v1.2.3...v1.2.4) (2026-04-16)
+
+
+### Bug Fixes
+
+* CC bank balance deduction, FK cascade, onboarding redirect, Bills category removal ([367b0ec](https://github.com/soulwaxx/cashflow_manager/commit/367b0ec32bb5fd21c75202e4e3efc0ec8c5bacc7))
+* change gh username [skip ci] ([99186d9](https://github.com/soulwaxx/cashflow_manager/commit/99186d968e3c1020aff13e315a85d2a9f0f055c4))
+
 ## [1.2.3](https://github.com/soulwaxx/cashflow_manager/compare/v1.2.2...v1.2.3) (2026-04-11)
 
 
