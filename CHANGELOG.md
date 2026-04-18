@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/soulwaxx/cashflow_manager/compare/v1.2.4...v1.3.0) (2026-04-18)
+
+
+### Features
+
+* remove installments ([c937e86](https://github.com/soulwaxx/cashflow_manager/commit/c937e86bef6a498f0f040b7f74b6c3f3cae08fad))
+
 ## [1.2.4](https://github.com/soulwaxx/cashflow_manager/compare/v1.2.3...v1.2.4) (2026-04-16)
 
 
