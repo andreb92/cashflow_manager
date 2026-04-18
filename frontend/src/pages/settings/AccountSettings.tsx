@@ -11,6 +11,25 @@ export default function AccountSettings() {
   const qc = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [password, setPassword] = useState('');
+  const [changePwOpen, setChangePwOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [changePwError, setChangePwError] = useState<string | null>(null);
+  const [changePwDone, setChangePwDone] = useState(false);
+
+  const { mutate: changePassword, isPending: changePwPending } = useMutation({
+    mutationFn: () => authApi.changePassword(currentPw, newPw),
+    onSuccess: () => {
+      setChangePwDone(true);
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      setChangePwError(null);
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setChangePwError(detail ?? 'Failed to change password. Please try again.');
+    },
+  });
 
   const { mutate: deleteAccount, isPending, error: deleteError } = useMutation({
     mutationFn: () => authApi.deleteMe(password),
@@ -32,8 +51,13 @@ export default function AccountSettings() {
           {user?.has_oidc && <span>OIDC / SSO</span>}
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button variant="secondary" onClick={logout}>Sign out</Button>
+        {user?.has_password && (
+          <Button variant="secondary" onClick={() => { setChangePwOpen(true); setChangePwDone(false); setChangePwError(null); }}>
+            Change password
+          </Button>
+        )}
         <Button
           variant="ghost"
           className="text-red-600 dark:text-red-400 hover:text-red-700"
@@ -42,6 +66,53 @@ export default function AccountSettings() {
           Delete account
         </Button>
       </div>
+
+      <Modal
+        open={changePwOpen}
+        onClose={() => { setChangePwOpen(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setChangePwError(null); setChangePwDone(false); }}
+        title="Change password"
+      >
+        {changePwDone ? (
+          <div className="text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3">
+            Password changed successfully.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <Input
+              label="Current password"
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              placeholder="Current password"
+            />
+            <Input
+              label="New password"
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+            <Input
+              label="Confirm new password"
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              placeholder="Repeat new password"
+            />
+            {changePwError && <p className="text-xs text-red-600">{changePwError}</p>}
+            {newPw && confirmPw && newPw !== confirmPw && (
+              <p className="text-xs text-red-600">Passwords do not match.</p>
+            )}
+            <Button
+              isLoading={changePwPending}
+              disabled={!currentPw || !newPw || newPw !== confirmPw || newPw.length < 8 || changePwPending}
+              onClick={() => changePassword()}
+            >
+              Update password
+            </Button>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={deleteOpen}

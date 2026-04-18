@@ -61,19 +61,20 @@ export default function AnalyticsPage() {
 
   // Convert transfer rows into AnalyticsCategoryRow entries so the existing
   // chart components can render them without modification. The category_id is
-  // set to the desired display label (e.g. "→ My Savings") so that the chart's
-  // fallback path (categoryMap[id] ?? id) shows a readable series name.
-  const transferAsRows = useMemo<AnalyticsCategoryRow[]>(
-    () =>
-      transferRows.map((t) => ({
-        category_id: `→ ${t.to_account_name}`,
-        type: t.to_account_type,
-        sub_type: 'transfer',
-        month: t.month,
-        total_amount: t.total_amount,
-      })),
-    [transferRows],
-  );
+  // set to the desired display label so the chart's fallback path
+  // (categoryMap[id] ?? id) shows a readable, type-qualified series name.
+  // Transfers are neither expenses nor income so they are hidden when the user
+  // has set a direction filter — only shown in the "all" (unfiltered) view.
+  const transferAsRows = useMemo<AnalyticsCategoryRow[]>(() => {
+    if (filters.direction !== 'all') return [];
+    return transferRows.map((t) => ({
+      category_id: `→ ${t.to_account_name} (${t.to_account_type})`,
+      type: t.to_account_type,
+      sub_type: 'transfer',
+      month: t.month,
+      total_amount: t.total_amount,
+    }));
+  }, [transferRows, filters.direction]);
 
   const rows = useMemo(
     () => [...categoryRows, ...transferAsRows],

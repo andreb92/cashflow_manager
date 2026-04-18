@@ -11,6 +11,8 @@ export const authApi = {
   logout: () =>
     apiClient.post('/auth/logout'),
   oidcLoginUrl: () => '/api/v1/auth/oidc/login',
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient.put('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
   deleteMe: (password: string) => apiClient.delete('/users/me', { data: { password } }),
 };
 

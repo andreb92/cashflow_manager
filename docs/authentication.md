@@ -30,7 +30,23 @@ Returns `200` with `access_token` cookie. Returns `401` on invalid credentials.
 
 ### Passwords
 
-Stored as bcrypt hashes. Never stored or logged in plaintext.
+Stored as bcrypt hashes (bcrypt with random salt). Never stored or logged in plaintext.
+
+### Change password
+
+`PUT /api/v1/users/me/password`
+
+```json
+{ "current_password": "old-secret", "new_password": "new-secret" }
+```
+
+Requires the authenticated user to supply their current password. Returns:
+- `200 {"ok": true}` on success
+- `401` if `current_password` is wrong
+- `422` if `new_password` is shorter than 8 characters
+- `400` if the account is OIDC-only (no password to change)
+
+The "Change password" button in **Settings → Account** is visible only to users who have `has_password: true`.
 
 ### Current user
 
@@ -130,7 +146,7 @@ Permanently deletes the authenticated user's account and all associated data.
 - Returns `401` if the password is wrong or absent, or if the user has no password set (OIDC-only users)
 - On success: clears the `access_token` and `oidc_id_token` cookies and returns `{"ok": true}`
 
-**OIDC-only users** (no password set) cannot use this endpoint. There is currently no self-service deletion path for users who signed up exclusively via OIDC.
+**OIDC-only users** (no password set) must supply an empty `{}` body (the field is optional). They are exempt from the password check.
 
 ---
 
