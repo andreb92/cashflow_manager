@@ -1,3 +1,15 @@
+# [1.4.0](https://github.com/soulwaxx/cashflow_manager/compare/v1.3.0...v1.4.0) (2026-04-19)
+
+
+### Bug Fixes
+
+* perf audit — transfer FK matching, unbounded queries, double DB load, date index ([80ff6b8](https://github.com/soulwaxx/cashflow_manager/commit/80ff6b827a4681718338d51026d2d25ba84675d6)), closes [#1](https://github.com/soulwaxx/cashflow_manager/issues/1) [#2](https://github.com/soulwaxx/cashflow_manager/issues/2) [#3](https://github.com/soulwaxx/cashflow_manager/issues/3) [#4](https://github.com/soulwaxx/cashflow_manager/issues/4)
+
+
+### Features
+
+* change password, Bills migration, analytics transfer clarity ([7a7854a](https://github.com/soulwaxx/cashflow_manager/commit/7a7854ab21620a1c10f6349662eec94632da4392))
+
 # [1.3.0](https://github.com/soulwaxx/cashflow_manager/compare/v1.2.4...v1.3.0) (2026-04-18)
 
 
