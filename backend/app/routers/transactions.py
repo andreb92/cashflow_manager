@@ -30,6 +30,8 @@ def list_transactions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if billing_month is None and date_month is None and limit is None:
+        raise HTTPException(400, "At least one of billing_month, date_month, or limit is required")
     q = db.query(Transaction).filter_by(user_id=current_user.id)
     if billing_month:
         q = q.filter(Transaction.billing_month.startswith(billing_month))

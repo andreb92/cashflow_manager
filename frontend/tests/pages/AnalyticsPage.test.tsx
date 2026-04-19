@@ -77,3 +77,19 @@ test('AnalyticsPage switching to cumulative view changes active button variant',
   expect(cumBtn.className).toMatch(/bg-blue-600/);
   expect(barBtn.className).not.toMatch(/bg-blue-600/);
 });
+
+test('AnalyticsPage initializes with current year range', async () => {
+  render(<AnalyticsPage />, { wrapper });
+
+  const expectedFrom = `${year}-01`;
+  const expectedTo = `${year}-12`;
+
+  // AnalyticsFilters renders two <input type="month"> elements for "From" and "To".
+  // They are queried by their display value since the labels lack htmlFor associations.
+  await waitFor(() => {
+    const monthInputs = screen.getAllByDisplayValue(new RegExp(`^${year}-`)) as HTMLInputElement[];
+    const values = monthInputs.map((el) => el.value);
+    expect(values).toContain(expectedFrom);
+    expect(values).toContain(expectedTo);
+  });
+});

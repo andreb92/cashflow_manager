@@ -529,3 +529,44 @@ def test_delete_adjustment_rejects_wrong_forecast_id(client):
     fc_a = client.get(f"/api/v1/forecasts/{fc_a_id}").json()
     line = next(l for l in fc_a["lines"] if l["id"] == line_a_id)
     assert len(line["adjustments"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Perf #5: bisect-based adjustment lookup must select the correct adjustment
+# ---------------------------------------------------------------------------
+def test_forecast_projection_bisect_adjustment(client):
+    """Two adjustments at different valid_from dates: bisect must pick the right one per month."""
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={
+        "name": "BisectTest", "base_year": 2026, "projection_years": 2,
+    }).json()["id"]
+
+    # Add a manual line with base_amount=100
+    line_id = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "BisectLine", "base_amount": 100.0,
+    }).json()["id"]
+
+    # Adjustment 1: valid from 2027-03-01 → fixed amount 200
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-03-01", "new_amount": 200.0,
+    })
+    # Adjustment 2: valid from 2027-09-01 → fixed amount 300
+    client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-09-01", "new_amount": 300.0,
+    })
+
+    proj = client.get(f"/api/v1/forecasts/{fc_id}/projection").json()
+    bisect_line = next(l for l in proj["lines"] if l["detail"] == "BisectLine")
+    months = {m["month"]: m["effective_amount"] for m in bisect_line["months"]}
+
+    # Before first adjustment: base_amount applies
+    assert months["2027-01"] == pytest.approx(100.0), f"2027-01 should be base 100, got {months['2027-01']}"
+    assert months["2027-02"] == pytest.approx(100.0), f"2027-02 should be base 100, got {months['2027-02']}"
+
+    # From 2027-03 onward (but before 2027-09): first adjustment (200) applies
+    assert months["2027-03"] == pytest.approx(200.0), f"2027-03 should be 200, got {months['2027-03']}"
+    assert months["2027-08"] == pytest.approx(200.0), f"2027-08 should be 200, got {months['2027-08']}"
+
+    # From 2027-09 onward: second adjustment (300) applies
+    assert months["2027-09"] == pytest.approx(300.0), f"2027-09 should be 300, got {months['2027-09']}"
+    assert months["2028-12"] == pytest.approx(300.0), f"2028-12 should be 300, got {months['2028-12']}"

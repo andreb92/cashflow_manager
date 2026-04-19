@@ -430,6 +430,83 @@ def test_bank_balance_cc_debit_reduces_bank_in_billing_month(_standalone_db, mak
     assert compute_bank_balance(user.id, 2026, 2, db) == pytest.approx(800.0)
 
 
+def test_bank_balance_transfer_uses_pm_id_not_name(_standalone_db, make_user):
+    """Transfer matching must use from_payment_method_id when present — renaming the
+    PaymentMethod must not silently break historical transfers (B3)."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="xfer_pm_id@test.com")
+    db = _standalone_db
+
+    pm = PaymentMethod(user_id=user.id, name="OriginalName", type="bank", is_main_bank=True)
+    db.add(pm)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    # Transfer with the FK column populated
+    db.add(Transfer(
+        user_id=user.id, date="2026-01-15", amount=400,
+        from_account_type="bank", from_account_name="OriginalName",
+        to_account_type="saving", to_account_name="MySavings",
+        billing_month="2026-01-01", detail="",
+        from_payment_method_id=pm.id,
+    ))
+    db.commit()
+
+    # Rename the PM — the transfer's from_account_name no longer matches the PM name.
+    # Matching by ID must still find it and reduce the balance.
+    pm.name = "RenamedBank"
+    db.commit()
+
+    result = compute_bank_balance(user.id, 2026, 1, db)
+    assert result == pytest.approx(600.0), (
+        f"Transfer should match via from_payment_method_id after rename; got {result}"
+    )
+
+
+def test_bank_balance_transfer_fallback_to_name_when_no_id(_standalone_db, make_user):
+    """Legacy transfers (pre-migration) have from_payment_method_id=NULL — matching
+    must fall back to from_account_name for backward compatibility."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="xfer_name_fallback@test.com")
+    db = _standalone_db
+
+    pm = PaymentMethod(user_id=user.id, name="LegacyBank", type="bank", is_main_bank=True)
+    db.add(pm)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    # Transfer with NULL FK (legacy data)
+    db.add(Transfer(
+        user_id=user.id, date="2026-01-15", amount=250,
+        from_account_type="bank", from_account_name="LegacyBank",
+        to_account_type="saving", to_account_name="MySavings",
+        billing_month="2026-01-01", detail="",
+        from_payment_method_id=None,
+    ))
+    db.commit()
+
+    result = compute_bank_balance(user.id, 2026, 1, db)
+    assert result == pytest.approx(750.0), (
+        f"Legacy transfer should match by name when FK is NULL; got {result}"
+    )
+
+
 def test_compute_bank_balances_for_year_cc_debit_reduces_bank_in_billing_month(_standalone_db, make_user):
     """
     Same as above but for compute_bank_balances_for_year: CC debit in Jan (billing Feb)

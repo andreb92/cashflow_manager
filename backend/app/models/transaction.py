@@ -37,5 +37,6 @@ class Transaction(Base):
 
     __table_args__ = (
         Index("ix_transaction_user_billing_month", "user_id", "billing_month"),
+        Index("ix_transaction_user_date", "user_id", "date"),
         Index("ix_transaction_parent_id", "parent_transaction_id"),
     )

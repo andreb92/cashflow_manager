@@ -139,6 +139,47 @@ def test_year_summary_transfers_in_bank(client):
     assert january["transfers_in_bank"] == pytest.approx(0.0)
 
 
+def test_monthly_summary_no_double_query(client):
+    """
+    After the perf refactor, ``monthly_summary`` loads each dataset once and shares it
+    with ``compute_bank_balance`` via the ``_preloaded`` hook. This test is informational:
+    it exercises a month that contains both transactions and transfers to verify the
+    refactor did not regress any values.
+    """
+    _setup(client)
+    pm_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyBank")
+    cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Salary")
+    # Income
+    client.post("/api/v1/transactions", json={
+        "date": "2026-02-25", "detail": "Salary Feb", "amount": 2000,
+        "payment_method_id": pm_id, "category_id": cat_id, "transaction_direction": "income",
+    })
+    # Debit
+    housing_cat = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Housing")
+    client.post("/api/v1/transactions", json={
+        "date": "2026-02-05", "detail": "Rent", "amount": 800,
+        "payment_method_id": pm_id, "category_id": housing_cat, "transaction_direction": "debit",
+    })
+    # Transfer out
+    client.post("/api/v1/transfers", json={
+        "date": "2026-02-10", "detail": "Savings",
+        "amount": 300.0,
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+    })
+
+    r = client.get("/api/v1/summary/2026/2")
+    assert r.status_code == 200
+    data = r.json()
+
+    # 5000 opening + 2000 income - 800 debit - 300 transfer_out = 5900
+    assert data["bank_balance"] == pytest.approx(5900.0)
+    assert data["incomes"] == pytest.approx(2000.0)
+    assert data["outcomes_by_method"].get("MyBank") == pytest.approx(800.0)
+    assert data["transfers_out_bank"] == pytest.approx(300.0)
+    assert data["transfers_in_bank"] == pytest.approx(0.0)
+
+
 def test_monthly_summary_returns_stamp_duty_field(client):
     """
     monthly_summary must return a stamp_duty field of type float.

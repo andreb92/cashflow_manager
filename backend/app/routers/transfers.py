@@ -6,9 +6,21 @@ from dateutil.relativedelta import relativedelta
 from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.transfer import Transfer
+from app.models.payment_method import PaymentMethod
 from app.schemas.transfer import TransferCreate, TransferUpdate
 
 router = APIRouter(prefix="/transfers", tags=["transfers"])
+
+
+def _resolve_pm_id(db: Session, user_id: str, account_type: str, account_name: str) -> Optional[str]:
+    """Look up a PaymentMethod id by (user_id, name) when the account is a bank.
+    Returns None for non-bank account types (saving/investment/pension have no PM row)
+    or when no PM matches (defensive — name is user-editable).
+    """
+    if account_type != "bank" or not account_name:
+        return None
+    pm = db.query(PaymentMethod).filter_by(user_id=user_id, name=account_name).first()
+    return pm.id if pm else None
 
 @router.get("")
 def list_transfers(
@@ -36,6 +48,9 @@ def create_transfer(req: TransferCreate, current_user: User = Depends(get_curren
     tx_date = parse_date(req.date).date()
     bm = tx_date.replace(day=1)  # transfers always bill current month
 
+    from_pm_id = _resolve_pm_id(db, current_user.id, req.from_account_type, req.from_account_name)
+    to_pm_id = _resolve_pm_id(db, current_user.id, req.to_account_type, req.to_account_name)
+
     if req.recurrence_months:
         first = None
         for i in range(req.recurrence_months):
@@ -47,6 +62,8 @@ def create_transfer(req: TransferCreate, current_user: User = Depends(get_curren
                 to_account_name=req.to_account_name,
                 billing_month=str(occ_date.replace(day=1)),
                 recurrence_months=req.recurrence_months, notes=req.notes,
+                from_payment_method_id=from_pm_id,
+                to_payment_method_id=to_pm_id,
             )
             db.add(t)
             db.flush()
@@ -63,6 +80,8 @@ def create_transfer(req: TransferCreate, current_user: User = Depends(get_curren
         amount=req.amount, from_account_type=req.from_account_type,
         from_account_name=req.from_account_name, to_account_type=req.to_account_type,
         to_account_name=req.to_account_name, billing_month=str(bm), notes=req.notes,
+        from_payment_method_id=from_pm_id,
+        to_payment_method_id=to_pm_id,
     )
     db.add(t)
     db.commit()

@@ -19,18 +19,17 @@ interface Filters {
   paymentMethodIds: string[];
 }
 
-const year = new Date().getFullYear();
-const defaultFrom = `${year}-01`;
-const defaultTo = `${year}-12`;
-
 export default function AnalyticsPage() {
   const [view, setView] = useState<View>('bar');
-  const [filters, setFilters] = useState<Filters>({
-    from: defaultFrom,
-    to: defaultTo,
-    direction: 'all',
-    categoryIds: [],
-    paymentMethodIds: [],
+  const [filters, setFilters] = useState<Filters>(() => {
+    const y = new Date().getFullYear();
+    return {
+      from: `${y}-01`,
+      to: `${y}-12`,
+      direction: 'all',
+      categoryIds: [],
+      paymentMethodIds: [],
+    };
   });
 
   const { data: categoryRows = [] } = useQuery({

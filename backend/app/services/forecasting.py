@@ -1,3 +1,4 @@
+import bisect
 from collections import defaultdict
 
 from sqlalchemy.orm import Session
@@ -102,15 +103,19 @@ def project_forecast(forecast_id: str, user_id: str, db: Session) -> dict:
 
     for line in lines:
         adjs = adj_by_line[line.id]
+        # Build sorted list of valid_from strings once per line (adjs already
+        # sorted ascending by valid_from from the DB query).
+        adj_dates = [a.valid_from for a in adjs]
         months_data = []
         for year in range(start_year, end_year + 1):
             for month in range(1, 13):
                 month_str = f"{year:04d}-{month:02d}"
                 month_first = f"{year:04d}-{month:02d}-01"
-                # Find applicable adjustment
-                applicable = [a for a in adjs if a.valid_from <= month_first]
-                if applicable:
-                    adj = max(applicable, key=lambda a: a.valid_from)
+                # O(log n) lookup: find the rightmost adjustment whose
+                # valid_from <= month_first.
+                idx = bisect.bisect_right(adj_dates, month_first) - 1
+                if idx >= 0:
+                    adj = adjs[idx]
                     adj_type = getattr(adj, "adjustment_type", "fixed") or "fixed"
                     if adj_type == "percentage":
                         effective = float(line.base_amount) * (1 + float(adj.new_amount) / 100)

@@ -7,6 +7,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 export default function SummaryPage() {
   const [year, setYear] = useState(() => new Date().getFullYear());
+  const [inputYear, setInputYear] = useState(() => String(new Date().getFullYear()));
   const navigate = useNavigate();
 
   const { data: months = [], isLoading } = useQuery({
@@ -28,6 +29,7 @@ export default function SummaryPage() {
       highlight: false,
     })),
     { label: 'Transfers out', values: months.map((m) => fmt(m.transfers_out_bank)), highlight: false },
+    { label: 'Transfers in', values: months.map((m) => fmt(m.transfers_in_bank ?? 0)), highlight: false },
     { label: 'Stamp duty', values: months.map((m) => fmt(m.stamp_duty ?? 0)), highlight: false },
   ];
 
@@ -39,8 +41,14 @@ export default function SummaryPage() {
         <h1 className="text-xl font-bold text-primary">Monthly Summary</h1>
         <input
           type="number"
-          value={year}
-          onChange={(e) => setYear(parseInt(e.target.value))}
+          value={inputYear}
+          onChange={(e) => {
+            setInputYear(e.target.value);
+            const parsed = parseInt(e.target.value, 10);
+            if (!isNaN(parsed) && parsed >= 2000 && parsed <= 2100) {
+              setYear(parsed);
+            }
+          }}
           className="border border-line-strong rounded px-2 py-1 w-24 text-sm bg-elevated text-primary"
           min="2000"
           max="2100"

@@ -99,3 +99,15 @@ React 18 + TypeScript, Vite, TanStack Query, React Hook Form + Zod.
 **Backend:** `conftest.py` creates an in-memory SQLite DB per test and overrides `get_db` via FastAPI's dependency override system.
 
 **Frontend:** Vitest + Testing Library + MSW (Mock Service Worker) for API mocking; jsdom environment.
+
+## Wiki Knowledge Base
+
+Vault: `~/soulwaxx_brain` (read via `mcp__obsidian-vault__*`).
+
+When you need context not already in this project:
+1. Read `wiki/hot.md` first — recent context, under 500 words
+2. Read `wiki/index.md` if more breadth is needed
+3. Read `wiki/*` for domain-specific context
+4. Only then read individual pages
+
+Do NOT consult the wiki for general coding questions or anything already in this project.

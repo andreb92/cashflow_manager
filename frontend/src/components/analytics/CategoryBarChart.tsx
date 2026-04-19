@@ -16,9 +16,16 @@ export default function CategoryBarChart({ data, categories }: Props) {
   const months = Array.from(new Set(data.map((r) => r.month))).sort();
   const catLabels = Array.from(new Set(data.map((r) => categoryMap[r.category_id] ?? r.category_id)));
 
+  const byMonth = new Map<string, AnalyticsCategoryRow[]>();
+  for (const d of data) {
+    const arr = byMonth.get(d.month) ?? [];
+    arr.push(d);
+    byMonth.set(d.month, arr);
+  }
+
   const chartData = months.map((m) => {
     const row: Record<string, string | number> = { month: m };
-    for (const d of data.filter((r) => r.month === m)) {
+    for (const d of byMonth.get(m) ?? []) {
       const label = categoryMap[d.category_id] ?? d.category_id;
       row[label] = (Number(row[label]) || 0) + d.total_amount;
     }

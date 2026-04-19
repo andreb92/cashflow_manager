@@ -41,7 +41,7 @@ def test_create_recurrence_generates_n_transactions(client):
     assert r.status_code == 200
     r2 = client.get("/api/v1/transactions", params={"billing_month": "2026-01"})
     assert any(t["detail"] == "Gym" for t in r2.json())
-    all_gym = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Gym"]
+    all_gym = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json() if t["detail"] == "Gym"]
     assert len(all_gym) == 6
 
 def test_delete_single(client):
@@ -61,11 +61,11 @@ def test_delete_future_recurring(client):
         "payment_method_id": pm_id, "category_id": cat_id,
         "transaction_direction": "debit", "recurrence_months": 4,
     })
-    all_subs = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sub"]
+    all_subs = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json() if t["detail"] == "Sub"]
     # Delete 2nd occurrence and future
     second = sorted(all_subs, key=lambda t: t["date"])[1]
     client.delete(f"/api/v1/transactions/{second['id']}", params={"cascade": "future"})
-    remaining = [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "Sub"]
+    remaining = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json() if t["detail"] == "Sub"]
     assert len(remaining) == 1
 
 def test_list_filtered_by_billing_month(client):
@@ -95,7 +95,7 @@ def test_list_filtered_by_payment_method(client):
         "payment_method_id": amex_id, "category_id": cat_id,
         "transaction_direction": "debit",
     })
-    r = client.get("/api/v1/transactions", params={"payment_method_id": pm_id})
+    r = client.get("/api/v1/transactions", params={"payment_method_id": pm_id, "limit": 100})
     results = r.json()
     assert all(t["payment_method_id"] == pm_id for t in results)
     assert any(t["detail"] == "MyBank tx" for t in results)
@@ -110,7 +110,7 @@ def test_list_filtered_by_parent_id(client):
         "transaction_direction": "debit", "recurrence_months": 3,
     }).json()
     parent_id = first["id"]
-    r = client.get("/api/v1/transactions", params={"parent_id": parent_id})
+    r = client.get("/api/v1/transactions", params={"parent_id": parent_id, "limit": 100})
     children = r.json()
     # parent_id filter returns child transactions (not the root itself)
     assert len(children) == 2
@@ -148,7 +148,7 @@ def test_update_transaction_cascade_all(client):
     }).json()
     parent_id = first["id"]
     client.put(f"/api/v1/transactions/{parent_id}", json={"detail": "NewDetail"}, params={"cascade": "all"})
-    all_txs = [t for t in client.get("/api/v1/transactions").json()
+    all_txs = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
                if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id]
     assert len(all_txs) == 3
     assert all(t["detail"] == "NewDetail" for t in all_txs)
@@ -164,14 +164,14 @@ def test_update_transaction_cascade_future(client):
     parent_id = first["id"]
     # Get all 3 occurrences sorted by date
     all_txs = sorted(
-        [t for t in client.get("/api/v1/transactions").json()
+        [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
          if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id],
         key=lambda t: t["date"],
     )
     second_id = all_txs[1]["id"]
     # Update from 2nd occurrence forward
     client.put(f"/api/v1/transactions/{second_id}", json={"detail": "Updated"}, params={"cascade": "future"})
-    refreshed = {t["id"]: t for t in client.get("/api/v1/transactions").json()
+    refreshed = {t["id"]: t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
                  if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id}
     assert refreshed[all_txs[0]["id"]]["detail"] == "Original"  # 1st unchanged
     assert refreshed[all_txs[1]["id"]]["detail"] == "Updated"   # 2nd updated
@@ -188,11 +188,11 @@ def test_delete_transaction_cascade_all(client):
         "transaction_direction": "debit", "recurrence_months": 3,
     }).json()
     parent_id = first["id"]
-    all_before = [t for t in client.get("/api/v1/transactions").json()
+    all_before = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
                   if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id]
     assert len(all_before) == 3
     client.delete(f"/api/v1/transactions/{parent_id}", params={"cascade": "all"})
-    all_after = [t for t in client.get("/api/v1/transactions").json()
+    all_after = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
                  if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id]
     assert len(all_after) == 0
 
@@ -206,13 +206,13 @@ def test_delete_transaction_cascade_future(client):
     }).json()
     parent_id = first["id"]
     all_txs = sorted(
-        [t for t in client.get("/api/v1/transactions").json()
+        [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
          if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id],
         key=lambda t: t["date"],
     )
     second_id = all_txs[1]["id"]
     client.delete(f"/api/v1/transactions/{second_id}", params={"cascade": "future"})
-    remaining = [t for t in client.get("/api/v1/transactions").json()
+    remaining = [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json()
                  if t["id"] == parent_id or t.get("parent_transaction_id") == parent_id]
     assert len(remaining) == 1
     assert remaining[0]["id"] == all_txs[0]["id"]
@@ -344,7 +344,7 @@ def test_cascade_all_update_does_not_change_sibling_dates(client):
         "transaction_direction": "debit", "recurrence_months": 3,
     })
     txs = sorted(
-        [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "RentCascadeTest"],
+        [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json() if t["detail"] == "RentCascadeTest"],
         key=lambda t: t["date"],
     )
     assert len(txs) == 3
@@ -354,7 +354,7 @@ def test_cascade_all_update_does_not_change_sibling_dates(client):
                params={"cascade": "all"},
                json={"amount": 850, "date": "2026-01-15"})
     updated = sorted(
-        [t for t in client.get("/api/v1/transactions").json() if t["detail"] == "RentCascadeTest"],
+        [t for t in client.get("/api/v1/transactions", params={"limit": 100}).json() if t["detail"] == "RentCascadeTest"],
         key=lambda t: t["date"],
     )
     assert len(updated) == 3
@@ -400,8 +400,8 @@ def test_transaction_list_order_is_stable(client):
             "transaction_direction": "debit",
         })
 
-    r1 = client.get("/api/v1/transactions").json()
-    r2 = client.get("/api/v1/transactions").json()
+    r1 = client.get("/api/v1/transactions", params={"billing_month": "2026-03"}).json()
+    r2 = client.get("/api/v1/transactions", params={"billing_month": "2026-03"}).json()
     assert [t["id"] for t in r1] == [t["id"] for t in r2], "Order is not stable"
 
 
@@ -502,3 +502,11 @@ def test_create_transaction_invalid_date_returns_422(client):
         "payment_method_id": pm_id, "transaction_direction": "debit",
     })
     assert r.status_code == 422
+
+
+def test_list_transactions_requires_filter(client):
+    """GET /transactions with no billing_month, date_month, or limit must return HTTP 400."""
+    _setup(client)
+    r = client.get("/api/v1/transactions")
+    assert r.status_code == 400
+    assert "billing_month" in r.json()["detail"] or "required" in r.json()["detail"].lower()
