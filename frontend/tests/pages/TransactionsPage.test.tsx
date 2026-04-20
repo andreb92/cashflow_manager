@@ -39,10 +39,16 @@ beforeEach(() => {
   server.use(
     http.get('/api/v1/transactions', () => HttpResponse.json(mockTransactions)),
     http.get('/api/v1/payment-methods', () =>
-      HttpResponse.json([{ id: 'pm1', name: 'Visa', type: 'credit_card', is_main_bank: false, is_active: true }])
+      HttpResponse.json([
+        { id: 'pm1', name: 'Visa', type: 'credit_card', is_main_bank: false, is_active: true },
+        { id: 'pm2', name: 'Salary bank', type: 'bank', is_main_bank: true, is_active: true },
+      ])
     ),
     http.get('/api/v1/categories', () =>
-      HttpResponse.json([{ id: 'cat1', type: 'Personal', sub_type: 'Food', is_active: true }])
+      HttpResponse.json([
+        { id: 'cat1', type: 'Personal', sub_type: 'Food', is_active: true },
+        { id: 'cat2', type: 'Income', sub_type: 'Salary', is_active: true },
+      ])
     ),
   );
 });
@@ -159,4 +165,44 @@ test('TransactionForm shows billing hint for credit_card payment method', async 
   const methodSelect = screen.getByLabelText(/payment method/i);
   await user.selectOptions(methodSelect, 'pm1');
   expect(screen.getByText(/billed in/i)).toBeInTheDocument();
+});
+
+test('Transaction edit form only exposes backend-supported fields', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown;
+
+  server.use(
+    http.put('/api/v1/transactions/tx2', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({
+        ...mockTransactions[1],
+        detail: 'Updated salary',
+      });
+    })
+  );
+
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Salary')).toBeInTheDocument());
+
+  const salaryRow = screen.getByText('Salary').closest('li')!;
+  await user.click(within(salaryRow).getByRole('button', { name: /edit/i }));
+
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.queryByLabelText(/payment method/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/^direction$/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/recurring every/i)).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/apply changes to/i)).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).toMatchObject({
+    date: '2026-03-01',
+    detail: 'Salary',
+    amount: 2800,
+    category_id: 'cat2',
+  });
+  expect(requestBody).not.toHaveProperty('payment_method_id');
+  expect(requestBody).not.toHaveProperty('transaction_direction');
+  expect(requestBody).not.toHaveProperty('recurrence_months');
 });

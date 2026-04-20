@@ -19,9 +19,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: user = null, isLoading } = useCurrentUser();
 
   const logout = async () => {
-    await authApi.logout();
     qc.clear();
-    window.location.href = '/login';
+    window.location.href = authApi.oidcLogoutUrl();
   };
 
   return (

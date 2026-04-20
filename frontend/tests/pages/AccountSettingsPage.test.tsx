@@ -3,9 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
+import { vi } from 'vitest';
 import { server } from '../mocks/server';
 import { AuthProvider } from '../../src/contexts/AuthContext';
 import AccountSettings from '../../src/pages/settings/AccountSettings';
+import { authApi } from '../../src/api/auth';
+
+const deleteResponse = {} as Awaited<ReturnType<typeof authApi.deleteMe>>;
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -32,6 +36,24 @@ test('hides Change password button for OIDC-only users', async () => {
   render(<AccountSettings />, { wrapper });
   await waitFor(() => expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument());
   expect(screen.queryByRole('button', { name: /change password/i })).not.toBeInTheDocument();
+});
+
+test('sign out uses the OIDC logout path', async () => {
+  server.use(
+    http.get('/api/v1/auth/me', () =>
+      HttpResponse.json({ id: 'user-1', email: 'test@example.com', name: 'Test User', has_password: false, has_oidc: true })
+    )
+  );
+  const oidcLogoutSpy = vi.spyOn(authApi, 'oidcLogoutUrl');
+  const user = userEvent.setup();
+
+  render(<AccountSettings />, { wrapper });
+  await waitFor(() => expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument());
+
+  await user.click(screen.getByRole('button', { name: /sign out/i }));
+
+  expect(oidcLogoutSpy).toHaveBeenCalled();
+  oidcLogoutSpy.mockRestore();
 });
 
 test('opens change password modal on button click', async () => {
@@ -116,4 +138,48 @@ test('shows API error message on failure', async () => {
   await user.click(screen.getByRole('button', { name: /update password/i }));
 
   await waitFor(() => expect(screen.getByText(/current password is incorrect/i)).toBeInTheDocument());
+});
+
+test('OIDC-only users can delete their account without entering a password', async () => {
+  server.use(
+    http.get('/api/v1/auth/me', () =>
+      HttpResponse.json({ id: 'user-1', email: 'test@example.com', name: 'Test User', has_password: false, has_oidc: true })
+    )
+  );
+  const deleteMeSpy = vi.spyOn(authApi, 'deleteMe').mockResolvedValue(deleteResponse);
+  const user = userEvent.setup();
+
+  render(<AccountSettings />, { wrapper });
+  await waitFor(() => expect(screen.getByRole('button', { name: /delete account/i })).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: /delete account/i }));
+
+  expect(screen.queryByLabelText(/enter your password to confirm/i)).not.toBeInTheDocument();
+  const deleteButton = screen.getByRole('button', { name: /permanently delete account/i });
+  expect(deleteButton).toBeEnabled();
+
+  await user.click(deleteButton);
+
+  await waitFor(() => expect(deleteMeSpy).toHaveBeenCalledWith(undefined));
+  deleteMeSpy.mockRestore();
+});
+
+test('password users must enter a password before deleting their account', async () => {
+  const deleteMeSpy = vi.spyOn(authApi, 'deleteMe').mockResolvedValue(deleteResponse);
+  const user = userEvent.setup();
+
+  render(<AccountSettings />, { wrapper });
+  await waitFor(() => expect(screen.getByRole('button', { name: /delete account/i })).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: /delete account/i }));
+
+  const deleteButton = screen.getByRole('button', { name: /permanently delete account/i });
+  expect(screen.getByLabelText(/enter your password to confirm/i)).toBeInTheDocument();
+  expect(deleteButton).toBeDisabled();
+
+  await user.type(screen.getByLabelText(/enter your password to confirm/i), 'Password1!');
+  expect(deleteButton).toBeEnabled();
+
+  await user.click(deleteButton);
+
+  await waitFor(() => expect(deleteMeSpy).toHaveBeenCalledWith('Password1!'));
+  deleteMeSpy.mockRestore();
 });

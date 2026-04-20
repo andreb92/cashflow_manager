@@ -6,10 +6,15 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import SetupPage from '../../src/pages/SetupPage';
 
-// SetupPage manages its own QueryClientProvider and OnboardingProvider internally,
-// so the test wrapper only needs MemoryRouter.
+// SetupPage now relies on the surrounding QueryClientProvider so it shares the
+// same cache as the rest of the app.
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <MemoryRouter>{children}</MemoryRouter>;
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 // ---------------------------------------------------------------------------

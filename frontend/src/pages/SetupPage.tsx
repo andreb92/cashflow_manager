@@ -1,5 +1,4 @@
 import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OnboardingProvider, useOnboarding } from '../contexts/OnboardingContext';
 import WizardProgress from '../components/onboarding/WizardProgress';
 import StepStartDate from '../components/onboarding/StepStartDate';
@@ -37,12 +36,9 @@ function WizardContent() {
 }
 
 export default function SetupPage() {
-  const [qc] = React.useState(() => new QueryClient());
   return (
-    <QueryClientProvider client={qc}>
-      <OnboardingProvider>
-        <WizardContent />
-      </OnboardingProvider>
-    </QueryClientProvider>
+    <OnboardingProvider>
+      <WizardContent />
+    </OnboardingProvider>
   );
 }

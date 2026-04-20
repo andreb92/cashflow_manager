@@ -56,6 +56,8 @@ def test_oidc_login_redirects(oidc_client):
     assert resp.status_code in (302, 307)
     assert "https://example.com/auth" in resp.headers["location"]
     assert "nonce=" in resp.headers["location"]
+    assert oidc_client.cookies.get("oidc_state")
+    assert oidc_client.cookies.get("oidc_nonce")
 
 
 def test_oidc_logout_reads_id_token_from_cookie(oidc_client):
@@ -123,6 +125,10 @@ def test_oidc_callback_creates_new_user(oidc_client):
     oidc_client.cookies.delete("oidc_nonce")
 
     assert resp.status_code in (200, 302, 307)
+    assert oidc_client.cookies.get("access_token")
+    assert oidc_client.cookies.get("oidc_id_token")
+    assert oidc_client.cookies.get("oidc_state") is None
+    assert oidc_client.cookies.get("oidc_nonce") is None
 
 
 def test_oidc_callback_does_not_link_to_existing_email_user(oidc_client):
@@ -244,6 +250,8 @@ def test_oidc_logout_corrupted_cookie_redirects_to_login(oidc_client):
     oidc_client.cookies.delete("oidc_id_token")
     assert resp.status_code in (302, 307)
     assert "/login" in resp.headers["location"]
+    assert oidc_client.cookies.get("access_token") is None
+    assert oidc_client.cookies.get("oidc_id_token") is None
 
 
 def test_oidc_logout_discover_exception_redirects_to_login(oidc_client):

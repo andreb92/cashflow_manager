@@ -11,6 +11,10 @@ def _cfg(db_path: str) -> Config:
     """Return Alembic config pointed at a temp DB."""
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    cfg.set_main_option(
+        "script_location",
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic")),
+    )
     return cfg
 
 

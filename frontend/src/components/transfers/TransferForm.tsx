@@ -29,6 +29,7 @@ interface Props { onSuccess: () => void; initial?: Transfer; }
 
 export default function TransferForm({ onSuccess, initial }: Props) {
   const qc = useQueryClient();
+  const isEditing = !!initial;
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { register, handleSubmit, watch, setValue } = useForm<Fields>({
     defaultValues: initial
@@ -76,14 +77,21 @@ export default function TransferForm({ onSuccess, initial }: Props) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: (d: Fields) => {
-      const body = {
-        date: d.date, detail: d.detail, amount: parseFloat(d.amount),
-        from_account_type: d.from_account_type, from_account_name: d.from_account_name,
-        to_account_type: d.to_account_type, to_account_name: d.to_account_name,
-        ...(d.recurrence_months ? { recurrence_months: parseInt(d.recurrence_months) } : {}),
-        ...(d.notes ? { notes: d.notes } : {}),
-      };
-      return initial ? transfersApi.update(initial.id, body) : transfersApi.create(body);
+      const body = isEditing
+        ? {
+            date: d.date,
+            detail: d.detail,
+            amount: parseFloat(d.amount),
+            ...(d.notes ? { notes: d.notes } : {}),
+          }
+        : {
+            date: d.date, detail: d.detail, amount: parseFloat(d.amount),
+            from_account_type: d.from_account_type, from_account_name: d.from_account_name,
+            to_account_type: d.to_account_type, to_account_name: d.to_account_name,
+            ...(d.recurrence_months ? { recurrence_months: parseInt(d.recurrence_months) } : {}),
+            ...(d.notes ? { notes: d.notes } : {}),
+          };
+      return isEditing ? transfersApi.update(initial.id, body) : transfersApi.create(body);
     },
     onSuccess: () => {
       setSubmitError(null);
@@ -115,26 +123,34 @@ export default function TransferForm({ onSuccess, initial }: Props) {
           ? 'This transfer will affect your bank balance.'
           : 'This transfer does not affect your bank balance.'}
       </p>
-      <Select label="From account type" options={ACCOUNT_TYPES} {...register('from_account_type')} />
-      <Select
-        label="From account name"
-        options={accountNameOptions(fromType)}
-        required
-        {...register('from_account_name', { required: true })}
-      />
-      <Select label="To account type" options={ACCOUNT_TYPES} {...register('to_account_type')} />
-      <Select
-        label="To account name"
-        options={accountNameOptions(toType)}
-        required
-        {...register('to_account_name', { required: true })}
-      />
-      <Input label="Repeat for N months" type="number" min="1" {...register('recurrence_months')} />
+      {!isEditing ? (
+        <>
+          <Select label="From account type" options={ACCOUNT_TYPES} {...register('from_account_type')} />
+          <Select
+            label="From account name"
+            options={accountNameOptions(fromType)}
+            required
+            {...register('from_account_name', { required: true })}
+          />
+          <Select label="To account type" options={ACCOUNT_TYPES} {...register('to_account_type')} />
+          <Select
+            label="To account name"
+            options={accountNameOptions(toType)}
+            required
+            {...register('to_account_name', { required: true })}
+          />
+          <Input label="Repeat for N months" type="number" min="1" {...register('recurrence_months')} />
+        </>
+      ) : (
+        <p className="text-xs text-faint">
+          Account endpoints and recurrence settings cannot be changed from this form.
+        </p>
+      )}
       <Input label="Notes" type="text" {...register('notes')} />
       {submitError && (
         <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">{submitError}</p>
       )}
-      <Button type="submit" isLoading={isPending}>{initial ? 'Save' : 'Add transfer'}</Button>
+      <Button type="submit" isLoading={isPending}>{initial ? 'Save changes' : 'Add transfer'}</Button>
     </form>
   );
 }

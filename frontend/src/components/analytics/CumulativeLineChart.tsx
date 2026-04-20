@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend,
   CartesianGrid, ResponsiveContainer,
@@ -12,22 +13,36 @@ interface Props {
 }
 
 export default function CumulativeLineChart({ data, categories }: Props) {
-  const categoryMap = Object.fromEntries(categories.map((c) => [c.id, `${c.type}/${c.sub_type}`]));
-  const months = Array.from(new Set(data.map((r) => r.month))).sort();
-  const catLabels = Array.from(new Set(data.map((r) => categoryMap[r.category_id] ?? r.category_id)));
+  const { chartData, catLabels } = useMemo(() => {
+    const categoryMap = Object.fromEntries(categories.map((c) => [c.id, `${c.type}/${c.sub_type}`]));
+    const months = Array.from(new Set(data.map((r) => r.month))).sort();
+    const labels = Array.from(new Set(data.map((r) => categoryMap[r.category_id] ?? r.category_id)));
+    const rowsByMonth = new Map<string, AnalyticsCategoryRow[]>();
 
-  const running: Record<string, number> = {};
-  const chartData = months.map((m) => {
-    const row: Record<string, string | number> = { month: m };
-    for (const d of data.filter((r) => r.month === m)) {
-      const label = categoryMap[d.category_id] ?? d.category_id;
-      running[label] = (running[label] ?? 0) + d.total_amount;
+    for (const row of data) {
+      const bucket = rowsByMonth.get(row.month);
+      if (bucket) {
+        bucket.push(row);
+      } else {
+        rowsByMonth.set(row.month, [row]);
+      }
     }
-    for (const label of catLabels) {
-      row[label] = running[label] ?? 0;
-    }
-    return row;
-  });
+
+    const running: Record<string, number> = {};
+    const rows = months.map((month) => {
+      const row: Record<string, string | number> = { month };
+      for (const entry of rowsByMonth.get(month) ?? []) {
+        const label = categoryMap[entry.category_id] ?? entry.category_id;
+        running[label] = (running[label] ?? 0) + entry.total_amount;
+      }
+      for (const label of labels) {
+        row[label] = running[label] ?? 0;
+      }
+      return row;
+    });
+
+    return { chartData: rows, catLabels: labels };
+  }, [categories, data]);
 
   return (
     <ResponsiveContainer width="100%" height={340}>

@@ -45,7 +45,12 @@ def category_spending(
         return []
 
     cat_ids = {r.category_id for r in rows if r.category_id}
-    cats = {c.id: c for c in db.query(Category).filter(Category.id.in_(cat_ids)).all()}
+    cats = {
+        c.id: c
+        for c in db.query(Category)
+        .filter(Category.user_id == user_id, Category.id.in_(cat_ids))
+        .all()
+    }
 
     result = []
     for row in rows:

@@ -45,6 +45,38 @@ def test_logout_clears_cookie(client):
     # After logout the cookie should be cleared (max_age=0 or deleted)
 
 
+def test_logout_with_oidc_id_token_redirects_to_provider_end_session(client):
+    import os
+    from unittest.mock import patch, AsyncMock
+    from app.config import get_settings
+    from app.services.oidc import encrypt_cookie
+
+    client.post("/api/v1/auth/register", json={"email": "oidc@test.com", "password": "password1", "name": "OIDC"})
+    os.environ["OIDC_ENABLED"] = "true"
+    os.environ["OIDC_ISSUER_URL"] = "https://example.com"
+    os.environ["OIDC_CLIENT_ID"] = "client-id"
+    os.environ["OIDC_CLIENT_SECRET"] = "client-secret"
+    os.environ["OIDC_REDIRECT_URI"] = "http://localhost:8000/api/v1/auth/oidc/callback"
+    os.environ["SESSION_ENCRYPTION_KEY"] = "a" * 64
+    get_settings.cache_clear()
+    try:
+        client.cookies.set("oidc_id_token", encrypt_cookie("raw-id-token", "a" * 64))
+        discovery = {
+            "authorization_endpoint": "https://example.com/auth",
+            "token_endpoint": "https://example.com/token",
+            "end_session_endpoint": "https://example.com/logout",
+        }
+        with patch("app.routers.auth._oidc.discover_endpoints", AsyncMock(return_value=discovery)):
+            resp = client.post("/api/v1/auth/logout", follow_redirects=False)
+        assert resp.status_code in (302, 307)
+        assert "https://example.com/logout" in resp.headers["location"]
+        assert "id_token_hint=raw-id-token" in resp.headers["location"]
+    finally:
+        for key in ("OIDC_ENABLED", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI", "SESSION_ENCRYPTION_KEY"):
+            os.environ.pop(key, None)
+        get_settings.cache_clear()
+
+
 def test_me_rejects_token_without_sub(client):
     """A valid JWT that has no 'sub' claim must return 401, not 500."""
     from app.services.auth import create_access_token
@@ -154,6 +186,28 @@ def test_register_with_basic_auth_disabled_returns_403(client):
         resp = client.post(
             "/api/v1/auth/register",
             json={"email": "new@test.com", "password": "password1", "name": "New"},
+        )
+        assert resp.status_code == 403
+    finally:
+        os.environ.pop("BASIC_AUTH_ENABLED", None)
+        get_settings.cache_clear()
+
+
+def test_login_with_basic_auth_disabled_returns_403(client):
+    """POST /auth/login must return 403 when basic_auth_enabled is False."""
+    import os
+    from app.config import get_settings
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "login-disabled@test.com", "password": "password1", "name": "Disabled"},
+    )
+    os.environ["BASIC_AUTH_ENABLED"] = "false"
+    get_settings.cache_clear()
+    try:
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={"email": "login-disabled@test.com", "password": "password1"},
         )
         assert resp.status_code == 403
     finally:

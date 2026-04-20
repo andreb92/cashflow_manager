@@ -1,5 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.user import User, gen_uuid
@@ -22,6 +23,45 @@ def _set_auth_cookie(response: Response, token: str) -> None:
         max_age=60 * 60 * 24 * settings.jwt_expire_days,
         secure=not settings.development_mode,
     )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(key=COOKIE_NAME)
+
+
+def _clear_oidc_flow_cookies(response: Response) -> None:
+    response.delete_cookie(key=OIDC_STATE_COOKIE)
+    response.delete_cookie(key=OIDC_NONCE_COOKIE)
+
+
+def _clear_oidc_session_cookie(response: Response) -> None:
+    response.delete_cookie(key=OIDC_ID_TOKEN_COOKIE)
+
+
+def _clear_all_auth_cookies(response: Response) -> None:
+    _clear_auth_cookie(response)
+    _clear_oidc_session_cookie(response)
+    _clear_oidc_flow_cookies(response)
+
+
+async def _build_oidc_logout_redirect(oidc_id_token: str | None) -> RedirectResponse | None:
+    settings = get_settings()
+    if not settings.oidc_enabled or not oidc_id_token:
+        return None
+    try:
+        endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
+        end_session = endpoints.get("end_session_endpoint")
+        if not end_session:
+            return None
+        id_token = _oidc.decrypt_cookie(oidc_id_token, settings.session_encryption_key)
+        if id_token is None:
+            return None
+        logout_url = f"{end_session}?id_token_hint={id_token}&post_logout_redirect_uri=/"
+        redirect = RedirectResponse(url=logout_url)
+        _clear_all_auth_cookies(redirect)
+        return redirect
+    except Exception:
+        return None
 
 
 @router.post("/register", response_model=UserOut)
@@ -53,6 +93,9 @@ def register(body: RegisterRequest, response: Response, db: Session = Depends(ge
 
 @router.post("/login", response_model=UserOut)
 def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    settings = get_settings()
+    if not settings.basic_auth_enabled:
+        raise HTTPException(status_code=403, detail="Basic auth disabled")
     user = db.query(User).filter_by(email=body.email).first()
     if not user or not user.hashed_password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -70,8 +113,14 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
 
 
 @router.post("/logout")
-def logout(response: Response):
-    response.delete_cookie(key=COOKIE_NAME)
+async def logout(
+    response: Response,
+    oidc_id_token: Annotated[str | None, Cookie()] = None,
+):
+    redirect = await _build_oidc_logout_redirect(oidc_id_token)
+    if redirect:
+        return redirect
+    _clear_all_auth_cookies(response)
     return {"ok": True}
 
 
@@ -109,10 +158,10 @@ async def oidc_login(response: Response):
         f"&redirect_uri={settings.oidc_redirect_uri}"
         f"&scope=openid+email+profile&state={state}&nonce={nonce}"
     )
-    response.set_cookie(key=OIDC_STATE_COOKIE, value=state, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
-    response.set_cookie(key=OIDC_NONCE_COOKIE, value=nonce, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=auth_url)
+    redirect = RedirectResponse(url=auth_url)
+    redirect.set_cookie(key=OIDC_STATE_COOKIE, value=state, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
+    redirect.set_cookie(key=OIDC_NONCE_COOKIE, value=nonce, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
+    return redirect
 
 
 @router.get("/oidc/callback")
@@ -188,15 +237,14 @@ async def oidc_callback(
         db.commit()
         db.refresh(user)
 
+    redirect = RedirectResponse(url="/")
     token = create_access_token({"sub": user.id})
-    _set_auth_cookie(response, token)
+    _set_auth_cookie(redirect, token)
     if tokens.get("id_token"):
         enc = _oidc.encrypt_cookie(tokens["id_token"], settings.session_encryption_key)
-        response.set_cookie(key=OIDC_ID_TOKEN_COOKIE, value=enc, httponly=True, samesite="lax", secure=not settings.development_mode)
-    response.delete_cookie(key=OIDC_STATE_COOKIE)
-    response.delete_cookie(key=OIDC_NONCE_COOKIE)
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/")
+        redirect.set_cookie(key=OIDC_ID_TOKEN_COOKIE, value=enc, httponly=True, samesite="lax", secure=not settings.development_mode)
+    _clear_oidc_flow_cookies(redirect)
+    return redirect
 
 
 @router.get("/oidc/logout")
@@ -205,22 +253,9 @@ async def oidc_logout(
     oidc_id_token: Annotated[str | None, Cookie()] = None,
     _current_user: User = Depends(get_current_user),
 ):
-    settings = get_settings()
-    response.delete_cookie(key=COOKIE_NAME)
-    response.delete_cookie(key=OIDC_ID_TOKEN_COOKIE)
-    if settings.oidc_enabled and oidc_id_token:
-        try:
-            endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
-            end_session = endpoints.get("end_session_endpoint")
-            if end_session:
-                id_token = _oidc.decrypt_cookie(oidc_id_token, settings.session_encryption_key)
-                if id_token is None:
-                    from fastapi.responses import RedirectResponse
-                    return RedirectResponse(url="/login")
-                logout_url = f"{end_session}?id_token_hint={id_token}&post_logout_redirect_uri=/"
-                from fastapi.responses import RedirectResponse
-                return RedirectResponse(url=logout_url)
-        except Exception:
-            pass
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/login")
+    redirect = await _build_oidc_logout_redirect(oidc_id_token)
+    if redirect:
+        return redirect
+    redirect = RedirectResponse(url="/login")
+    _clear_all_auth_cookies(redirect)
+    return redirect

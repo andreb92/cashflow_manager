@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { transfersApi } from '../../api/transfers';
 import TransferForm from './TransferForm';
 import CascadeDeleteModal from './CascadeDeleteModal';
@@ -9,6 +9,7 @@ import { Badge } from '../ui/Badge';
 import type { Transfer } from '../../types/api';
 
 const fmt = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 2 });
+const PAGE_SIZE = 100;
 
 export default function TransferList() {
   const qc = useQueryClient();
@@ -16,10 +17,20 @@ export default function TransferList() {
   const [editTr, setEditTr] = useState<Transfer | null>(null);
   const [deleteTr, setDeleteTr] = useState<Transfer | null>(null);
 
-  const { data: transfers = [], isLoading } = useQuery({
-    queryKey: ['transfers'],
-    queryFn: () => transfersApi.list(),
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['transfers', 'paged'],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => transfersApi.list({ limit: PAGE_SIZE, offset: pageParam }),
+    getNextPageParam: (lastPage, _pages, lastPageParam) =>
+      lastPage.length === PAGE_SIZE ? lastPageParam + PAGE_SIZE : undefined,
   });
+  const transfers = data?.pages.flatMap((page) => page) ?? [];
 
   const { mutate: deleteOne, isPending: deleteLoading } = useMutation({
     mutationFn: ({ id, cascade }: { id: string; cascade: string }) =>
@@ -61,6 +72,13 @@ export default function TransferList() {
           </li>
         ))}
       </ul>
+      {hasNextPage && (
+        <div className="flex justify-center mt-3">
+          <Button variant="secondary" onClick={() => fetchNextPage()} isLoading={isFetchingNextPage}>
+            Load more
+          </Button>
+        </div>
+      )}
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add transfer">
         <TransferForm onSuccess={() => setAddOpen(false)} />

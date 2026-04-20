@@ -36,7 +36,7 @@ These have no safe default and **must** be set in production.
 
 | Variable | Default | Description |
 |---|---|---|
-| `BASIC_AUTH_ENABLED` | `true` | Enable username/password registration (`POST /api/v1/auth/register`) and login. Set to `false` to disable new registrations or force OIDC-only. |
+| `BASIC_AUTH_ENABLED` | `true` | Enable username/password registration (`POST /api/v1/auth/register`) and login (`POST /api/v1/auth/login`). Set to `false` to disable password auth entirely or force OIDC-only. |
 | `OIDC_ENABLED` | `false` | Enable OIDC login. Requires the four `OIDC_*` variables below. |
 | `OIDC_ISSUER_URL` | — | Base URL of the OIDC provider, e.g. `https://auth.example.com/realms/myrealm/`. Must include trailing slash. Used for OIDC discovery (appends `.well-known/openid-configuration`). |
 | `OIDC_CLIENT_ID` | — | Client ID registered with the OIDC provider. |
@@ -75,5 +75,5 @@ See `deploy/.env.example` for the production template, or `.env.example` at the 
 ## Notes
 
 - All variables are optional except `SECRET_KEY` and `SESSION_ENCRYPTION_KEY` in production (without them the backend will raise a `ValueError` and fail to start unless `DEVELOPMENT_MODE=true`).
-- `BASIC_AUTH_ENABLED` and `OIDC_ENABLED` can be toggled independently without data loss. Users who registered via basic auth and have an OIDC account with the same email are automatically merged.
+- `BASIC_AUTH_ENABLED` and `OIDC_ENABLED` can be toggled independently without data loss. OIDC users are matched by provider subject (`oidc_sub`); the backend does not auto-link them to an existing password-auth account by shared email.
 - Changing `TZ` does not retroactively shift stored timestamps; it affects how new timestamps and billing boundaries are computed.

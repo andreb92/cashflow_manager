@@ -1,9 +1,27 @@
 import { useEffect, useState } from 'react';
 
+function readStoredTheme() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('theme');
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredTheme(value: 'dark' | 'light') {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem('theme', value);
+  } catch {
+    // Ignore storage failures in restricted test or browser environments.
+  }
+}
+
 export function useTheme() {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem('theme');
+    const stored = readStoredTheme();
     if (stored) return stored === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
@@ -15,7 +33,7 @@ export function useTheme() {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    writeStoredTheme(dark ? 'dark' : 'light');
   }, [dark]);
 
   return { dark, toggle: () => setDark((d) => !d) };

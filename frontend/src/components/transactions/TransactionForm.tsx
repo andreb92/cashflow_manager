@@ -52,6 +52,7 @@ interface Props {
 
 export default function TransactionForm({ onSuccess, initial }: Props) {
   const qc = useQueryClient();
+  const isEditing = !!initial;
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [editCascade, setEditCascade] = useState<'single' | 'all' | 'future'>('single');
 
@@ -129,17 +130,25 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: (data: Fields) => {
-      const body = {
-        date: data.date,
-        detail: data.detail,
-        amount: parseFloat(data.amount),
-        payment_method_id: data.payment_method_id,
-        category_id: data.category_id,
-        transaction_direction: data.transaction_direction,
-        ...(data.recurrence_months ? { recurrence_months: parseInt(data.recurrence_months) } : {}),
-        ...(data.notes ? { notes: data.notes } : {}),
-      };
-      return initial
+      const body = isEditing
+        ? {
+            date: data.date,
+            detail: data.detail,
+            amount: parseFloat(data.amount),
+            category_id: data.category_id || null,
+            ...(data.notes ? { notes: data.notes } : {}),
+          }
+        : {
+            date: data.date,
+            detail: data.detail,
+            amount: parseFloat(data.amount),
+            payment_method_id: data.payment_method_id,
+            category_id: data.category_id,
+            transaction_direction: data.transaction_direction,
+            ...(data.recurrence_months ? { recurrence_months: parseInt(data.recurrence_months) } : {}),
+            ...(data.notes ? { notes: data.notes } : {}),
+          };
+      return isEditing
         ? transactionsApi.update(initial.id, body, initial.recurrence_months ? editCascade : undefined)
         : transactionsApi.create(body);
     },
@@ -186,11 +195,17 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
         hint="The total amount of this transaction in euros."
         {...register('amount', { required: true })}
       />
-      <Select
-        label="Payment method" options={methodOptions} required
-        hint={billingHint || 'Which account or card was used.'}
-        {...register('payment_method_id', { required: true })}
-      />
+      {!isEditing ? (
+        <Select
+          label="Payment method" options={methodOptions} required
+          hint={billingHint || 'Which account or card was used.'}
+          {...register('payment_method_id', { required: true })}
+        />
+      ) : (
+        <p className="text-xs text-faint">
+          Payment method and direction are fixed after creation.
+        </p>
+      )}
 
       {/* Two-step category selector */}
       <div className="flex flex-col gap-1">
@@ -225,7 +240,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
         <p className="text-xs text-faint">The spending category for budgeting and analytics.</p>
       </div>
 
-      {!directionIsFixed && (
+      {!isEditing && !directionIsFixed && (
         <Select
           label="Direction"
           hint="Expense: money going out. Income: money coming in."
@@ -235,43 +250,48 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
         />
       )}
 
-      {/* Recurrence radio toggle */}
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-secondary">Recurrence</span>
-        <div className="flex flex-wrap gap-2 items-center">
-          <button
-            type="button"
-            className={`${radioBase} ${recurType === 'none' ? radioActive : radioInactive}`}
-            onClick={() => handleRecurTypeChange('none')}
-          >
-            None
-          </button>
-          <button
-            type="button"
-            className={`${radioBase} ${recurType === 'recurring' ? radioActive : radioInactive}`}
-            onClick={() => handleRecurTypeChange('recurring')}
-          >
-            Recurring every
-          </button>
-          {recurType === 'recurring' && (
-            <input
-              type="number"
-              min="1"
-              placeholder="months"
-              className="border rounded px-2 py-1.5 text-sm bg-elevated text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 border-line-strong w-24"
-              {...register('recurrence_months')}
-            />
-          )}
-          {recurType === 'recurring' && (
-            <span className="text-sm text-secondary">months</span>
-          )}
+      {!isEditing ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-secondary">Recurrence</span>
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              type="button"
+              className={`${radioBase} ${recurType === 'none' ? radioActive : radioInactive}`}
+              onClick={() => handleRecurTypeChange('none')}
+            >
+              None
+            </button>
+            <button
+              type="button"
+              className={`${radioBase} ${recurType === 'recurring' ? radioActive : radioInactive}`}
+              onClick={() => handleRecurTypeChange('recurring')}
+            >
+              Recurring every
+            </button>
+            {recurType === 'recurring' && (
+              <input
+                type="number"
+                min="1"
+                placeholder="months"
+                className="border rounded px-2 py-1.5 text-sm bg-elevated text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 border-line-strong w-24"
+                {...register('recurrence_months')}
+              />
+            )}
+            {recurType === 'recurring' && (
+              <span className="text-sm text-secondary">months</span>
+            )}
+          </div>
+          <p className="text-xs text-faint">
+            {recurType === 'recurring' && 'Creates a copy of this transaction for each of the next N months.'}
+            {recurType === 'none' && 'One-off transaction with no repetition.'}
+          </p>
+          {recurType !== 'recurring' && <input type="hidden" {...register('recurrence_months')} />}
         </div>
+      ) : (
         <p className="text-xs text-faint">
-          {recurType === 'recurring' && 'Creates a copy of this transaction for each of the next N months.'}
-          {recurType === 'none' && 'One-off transaction with no repetition.'}
+          Recurrence settings cannot be changed from this form.
         </p>
-        {recurType !== 'recurring' && <input type="hidden" {...register('recurrence_months')} />}
-      </div>
+      )}
 
       <Input label="Notes" type="text" hint="Optional free-text notes for this transaction." {...register('notes')} />
       {initial?.recurrence_months && (

@@ -129,6 +129,53 @@ def test_create_transaction_invalid_payment_method(client):
     assert r.status_code == 422
 
 
+def test_create_transaction_rejects_foreign_category_id(client):
+    """A user must not be able to create a transaction against another user's category."""
+    pm_id, _ = _setup(client)
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/register", json={
+        "email": "bob@example.com", "password": "Password1!", "name": "Bob"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    foreign_cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Salary")
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/login", json={
+        "email": "alice@example.com", "password": "Password1!"
+    })
+    r = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Bad category", "amount": 50,
+        "payment_method_id": pm_id, "category_id": foreign_cat_id,
+        "transaction_direction": "debit",
+    })
+    assert r.status_code == 422
+
+
+def test_update_transaction_rejects_foreign_category_id(client):
+    """A user must not be able to update a transaction to another user's category."""
+    pm_id, cat_id = _setup(client)
+    tx_id = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Owned tx", "amount": 50,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    }).json()["id"]
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/register", json={
+        "email": "bob@example.com", "password": "Password1!", "name": "Bob"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    foreign_cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Salary")
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/login", json={
+        "email": "alice@example.com", "password": "Password1!"
+    })
+    r = client.put(f"/api/v1/transactions/{tx_id}", json={"category_id": foreign_cat_id})
+    assert r.status_code == 422
+
+
 # --- GET single transaction 404 ---
 
 def test_get_transaction_not_found(client):

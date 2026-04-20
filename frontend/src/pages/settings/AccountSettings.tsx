@@ -17,6 +17,7 @@ export default function AccountSettings() {
   const [confirmPw, setConfirmPw] = useState('');
   const [changePwError, setChangePwError] = useState<string | null>(null);
   const [changePwDone, setChangePwDone] = useState(false);
+  const requiresDeletePassword = Boolean(user?.has_password);
 
   const { mutate: changePassword, isPending: changePwPending } = useMutation({
     mutationFn: () => authApi.changePassword(currentPw, newPw),
@@ -32,7 +33,7 @@ export default function AccountSettings() {
   });
 
   const { mutate: deleteAccount, isPending, error: deleteError } = useMutation({
-    mutationFn: () => authApi.deleteMe(password),
+    mutationFn: () => authApi.deleteMe(requiresDeletePassword ? password : undefined),
     onSuccess: () => {
       // Don't call logout() — the backend already cleared the JWT cookie.
       // Calling authApi.logout() would hit a dead session.
@@ -124,20 +125,26 @@ export default function AccountSettings() {
             <p className="font-semibold text-red-700 dark:text-red-400">This action is irreversible.</p>
             <p>All your data will be permanently deleted: transactions, transfers, salary configs, assets, forecasts, and your account.</p>
           </div>
-          <Input
-            label="Enter your password to confirm"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-          />
+          {requiresDeletePassword ? (
+            <Input
+              label="Enter your password to confirm"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+            />
+          ) : (
+            <p className="text-sm text-secondary">
+              Your account uses OIDC / SSO only. No password confirmation is required.
+            </p>
+          )}
           {deleteError && (
             <p className="text-xs text-red-600">Failed to delete account. Please try again.</p>
           )}
           <Button
             isLoading={isPending}
             className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-            disabled={!password || isPending}
+            disabled={(requiresDeletePassword && !password) || isPending}
             onClick={() => deleteAccount()}
           >
             Permanently delete account

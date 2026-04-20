@@ -14,7 +14,7 @@ interface CreateBody {
 }
 
 export const transfersApi = {
-  list: (params?: { billing_month?: string; account?: string }) =>
+  list: (params?: { billing_month?: string; account?: string; limit?: number; offset?: number }) =>
     apiClient.get<Transfer[]>('/transfers', { params }).then((r) => r.data),
   get: (id: string) =>
     apiClient.get<Transfer>(`/transfers/${id}`).then((r) => r.data),

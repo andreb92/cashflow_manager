@@ -16,6 +16,21 @@ def _setup(client):
     })
     return pm_id, cat_id
 
+
+def _foreign_assets(client):
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/register", json={
+        "email": "bob@example.com", "password": "Password1!", "name": "Bob"
+    })
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    pm_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyBank")
+    cat_id = next(c["id"] for c in client.get("/api/v1/categories").json() if c["type"] == "Mobility")
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/login", json={
+        "email": "alice@example.com", "password": "Password1!"
+    })
+    return pm_id, cat_id
+
 def test_create_forecast(client):
     _setup(client)
     r = client.post("/api/v1/forecasts", json={"name": "3-year plan", "base_year": 2026, "projection_years": 3})
@@ -131,6 +146,26 @@ def test_add_line_to_nonexistent_forecast(client):
     assert r.status_code == 404
 
 
+@pytest.mark.parametrize("field_name", ["category_id", "payment_method_id"])
+def test_add_line_rejects_foreign_owned_ids(client, field_name):
+    alice_pm_id, alice_cat_id = _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
+    foreign_pm_id, foreign_cat_id = _foreign_assets(client)
+    payload = {
+        "detail": "Cross-user line",
+        "base_amount": 100.0,
+        "billing_day": 10,
+        "category_id": alice_cat_id,
+        "payment_method_id": alice_pm_id,
+    }
+    if field_name == "category_id":
+        payload["category_id"] = foreign_cat_id
+    else:
+        payload["payment_method_id"] = foreign_pm_id
+    r = client.post(f"/api/v1/forecasts/{fc_id}/lines", json=payload)
+    assert r.status_code == 422
+
+
 def test_update_line(client):
     _setup(client)
     fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
@@ -143,6 +178,24 @@ def test_update_line(client):
     assert r.status_code == 200
     assert r.json()["detail"] == "New name"
     assert r.json()["base_amount"] == 300.0
+
+
+@pytest.mark.parametrize("field_name", ["category_id", "payment_method_id"])
+def test_update_line_rejects_foreign_owned_ids(client, field_name):
+    alice_pm_id, alice_cat_id = _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
+    line_id = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "Own line", "base_amount": 200.0,
+        "category_id": alice_cat_id, "payment_method_id": alice_pm_id,
+    }).json()["id"]
+    foreign_pm_id, foreign_cat_id = _foreign_assets(client)
+    payload = {}
+    if field_name == "category_id":
+        payload["category_id"] = foreign_cat_id
+    else:
+        payload["payment_method_id"] = foreign_pm_id
+    r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json=payload)
+    assert r.status_code == 422
 
 
 def test_update_line_response_includes_adjustments(client):

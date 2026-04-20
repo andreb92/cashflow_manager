@@ -5,6 +5,7 @@ from app.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.payment_method import PaymentMethod
+from app.models.category import Category
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.billing import billing_month
 from app.services.recurrence import expand_recurrence
@@ -18,6 +19,15 @@ def _get_pm(db, pm_id, user_id):
     if not pm:
         raise HTTPException(422, "payment_method_id not found")
     return pm
+
+
+def _ensure_category_owned_by_user(db, category_id, user_id):
+    if category_id is None:
+        return None
+    category = db.query(Category).filter_by(id=category_id, user_id=user_id).first()
+    if not category:
+        raise HTTPException(422, "category_id not found")
+    return category
 
 @router.get("")
 def list_transactions(
@@ -54,6 +64,7 @@ def create_transaction(
     db: Session = Depends(get_db),
 ):
     pm = _get_pm(db, req.payment_method_id, current_user.id)
+    _ensure_category_owned_by_user(db, req.category_id, current_user.id)
 
     if req.recurrence_months:
         tx_date = parse_date(req.date).date()
@@ -108,6 +119,8 @@ def update_transaction(
     tx = db.query(Transaction).filter_by(id=tx_id, user_id=current_user.id).first()
     if not tx:
         raise HTTPException(404, "Not found")
+    if "category_id" in req.model_dump(exclude_none=True):
+        _ensure_category_owned_by_user(db, req.category_id, current_user.id)
 
     root_id = tx.parent_transaction_id or tx.id
     if cascade == "all":

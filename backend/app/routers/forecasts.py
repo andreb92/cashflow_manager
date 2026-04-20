@@ -2,11 +2,29 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.user import User
+from app.models.category import Category
+from app.models.payment_method import PaymentMethod
 from app.models.forecast import Forecast, ForecastLine, ForecastAdjustment
 from app.services.forecasting import auto_generate_lines, project_forecast
 from app.schemas.forecast import ForecastCreate, ForecastUpdate, ForecastLineCreate, AdjustmentCreate
 
 router = APIRouter(prefix="/forecasts", tags=["forecasts"])
+
+
+def _ensure_category_owned_by_user(db: Session, category_id: str | None, user_id: str) -> None:
+    if category_id is None:
+        return
+    category = db.query(Category).filter_by(id=category_id, user_id=user_id).first()
+    if not category:
+        raise HTTPException(422, "category_id not found")
+
+
+def _ensure_payment_method_owned_by_user(db: Session, payment_method_id: str | None, user_id: str) -> None:
+    if payment_method_id is None:
+        return
+    payment_method = db.query(PaymentMethod).filter_by(id=payment_method_id, user_id=user_id).first()
+    if not payment_method:
+        raise HTTPException(422, "payment_method_id not found")
 
 
 def _forecast_detail(forecast: Forecast, db: Session) -> dict:
@@ -120,6 +138,8 @@ def add_line(fc_id: str, req: ForecastLineCreate, current_user: User = Depends(g
     fc = db.query(Forecast).filter_by(id=fc_id, user_id=current_user.id).first()
     if not fc:
         raise HTTPException(404, "Not found")
+    _ensure_category_owned_by_user(db, req.category_id, current_user.id)
+    _ensure_payment_method_owned_by_user(db, req.payment_method_id, current_user.id)
     line = ForecastLine(forecast_id=fc_id, user_id=current_user.id, **req.model_dump())
     db.add(line)
     db.commit()
@@ -137,7 +157,12 @@ def update_line(fc_id: str, line_id: str, req: ForecastLineCreate, current_user:
     line = db.query(ForecastLine).filter_by(id=line_id, forecast_id=fc_id, user_id=current_user.id).first()
     if not line:
         raise HTTPException(404, "Not found")
-    for field, val in req.model_dump(exclude_none=True).items():
+    payload = req.model_dump(exclude_none=True)
+    if "category_id" in payload:
+        _ensure_category_owned_by_user(db, req.category_id, current_user.id)
+    if "payment_method_id" in payload:
+        _ensure_payment_method_owned_by_user(db, req.payment_method_id, current_user.id)
+    for field, val in payload.items():
         setattr(line, field, val)
     db.commit()
     db.refresh(line)

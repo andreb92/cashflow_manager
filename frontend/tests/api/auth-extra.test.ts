@@ -15,11 +15,32 @@ describe('authApi - additional coverage', () => {
     expect(authApi.oidcLoginUrl()).toBe('/api/v1/auth/oidc/login');
   });
 
+  it('oidcLogoutUrl returns the OIDC logout path string', () => {
+    expect(authApi.oidcLogoutUrl()).toBe('/api/v1/auth/oidc/logout');
+  });
+
   it('deleteMe calls DELETE /users/me with password', async () => {
+    let requestBody: unknown;
     server.use(
-      http.delete('/api/v1/users/me', () => HttpResponse.json({ ok: true }))
+      http.delete('/api/v1/users/me', async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json({ ok: true });
+      })
     );
     await expect(authApi.deleteMe('Password1!')).resolves.toBeDefined();
+    expect(requestBody).toEqual({ password: 'Password1!' });
+  });
+
+  it('deleteMe calls DELETE /users/me with an empty body when password is omitted', async () => {
+    let requestBody: unknown;
+    server.use(
+      http.delete('/api/v1/users/me', async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json({ ok: true });
+      })
+    );
+    await expect(authApi.deleteMe()).resolves.toBeDefined();
+    expect(requestBody).toEqual({});
   });
 
   it('register posts and returns user', async () => {

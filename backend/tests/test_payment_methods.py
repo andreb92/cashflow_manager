@@ -193,3 +193,23 @@ def test_create_payment_method_invalid_type_returns_422(client):
     r = client.post("/api/v1/payment-methods", json={"name": "X", "type": "crypto"})
     assert r.status_code == 422
 
+
+def test_update_payment_method_rejects_foreign_linked_bank_id(client):
+    """linked_bank_id on update must belong to the current user."""
+    _setup(client)
+    wallet_id = client.post("/api/v1/payment-methods", json={"name": "Wallet", "type": "prepaid"}).json()["id"]
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/register", json={
+        "email": "bob@example.com", "password": "Password1!", "name": "Bob"
+    })
+    from tests.test_onboarding import WIZARD_PAYLOAD
+    client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD)
+    foreign_bank_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["type"] == "bank")
+
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/login", json={
+        "email": "alice@example.com", "password": "Password1!"
+    })
+    r = client.put(f"/api/v1/payment-methods/{wallet_id}", json={"linked_bank_id": foreign_bank_id})
+    assert r.status_code == 422

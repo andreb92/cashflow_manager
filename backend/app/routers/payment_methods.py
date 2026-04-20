@@ -10,6 +10,11 @@ from app.models.transfer import Transfer
 
 router = APIRouter(prefix="/payment-methods", tags=["payment-methods"])
 
+
+def _validate_linked_bank_id(db: Session, linked_bank_id: str | None, user_id: str) -> None:
+    if linked_bank_id and not db.query(PaymentMethod).filter_by(id=linked_bank_id, user_id=user_id).first():
+        raise HTTPException(422, "linked_bank_id not found or belongs to another user")
+
 @router.get("")
 def list_methods(
     active_only: bool = Query(True),
@@ -23,9 +28,7 @@ def list_methods(
 
 @router.post("")
 def create_method(req: PaymentMethodCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if req.linked_bank_id:
-        if not db.query(PaymentMethod).filter_by(id=req.linked_bank_id, user_id=current_user.id).first():
-            raise HTTPException(422, "linked_bank_id not found or belongs to another user")
+    _validate_linked_bank_id(db, req.linked_bank_id, current_user.id)
     pm = PaymentMethod(user_id=current_user.id, **req.model_dump())
     db.add(pm)
     try:
@@ -52,6 +55,8 @@ def update_method(pm_id: str, req: PaymentMethodUpdate, current_user: User = Dep
     if not pm:
         raise HTTPException(404, "Not found")
     old_name = pm.name
+    if "linked_bank_id" in req.model_dump(exclude_none=True):
+        _validate_linked_bank_id(db, req.linked_bank_id, current_user.id)
     for field, val in req.model_dump(exclude_none=True).items():
         setattr(pm, field, val)
     # Cascade name change to all transfers referencing this account name

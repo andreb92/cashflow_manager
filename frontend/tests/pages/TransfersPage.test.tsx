@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { AuthProvider } from '../../src/contexts/AuthContext';
 import TransfersPage from '../../src/pages/TransfersPage';
+
+const PAGE_SIZE = 100;
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -77,4 +79,110 @@ test('TransfersPage opens add form', async () => {
   await waitFor(() => screen.getByRole('button', { name: /add transfer/i }));
   await user.click(screen.getByRole('button', { name: /add transfer/i }));
   expect(screen.getByRole('dialog')).toBeInTheDocument();
+});
+
+test('Transfer edit form only exposes backend-supported fields', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown;
+
+  server.use(
+    http.put('/api/v1/transfers/tr1', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({
+        ...mockTransfers[0],
+        detail: 'Updated savings deposit',
+      });
+    })
+  );
+
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+
+  const transferRow = screen.getByText('Savings deposit').closest('li')!;
+  await user.click(within(transferRow).getByRole('button', { name: /edit/i }));
+
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.queryByLabelText(/from account type/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/from account name/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/to account type/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/to account name/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/repeat for n months/i)).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+
+  await user.type(screen.getByLabelText(/notes/i), 'updated note');
+  await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).toMatchObject({
+    date: '2026-01-15',
+    detail: 'Savings deposit',
+    amount: 500,
+    notes: 'updated note',
+  });
+  expect(requestBody).not.toHaveProperty('from_account_type');
+  expect(requestBody).not.toHaveProperty('from_account_name');
+  expect(requestBody).not.toHaveProperty('to_account_type');
+  expect(requestBody).not.toHaveProperty('to_account_name');
+  expect(requestBody).not.toHaveProperty('recurrence_months');
+});
+
+test('TransfersPage loads additional transfer pages on demand', async () => {
+  const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => ({
+    id: `tr-${i}`,
+    user_id: 'u1',
+    date: '2026-01-15',
+    detail: `Transfer ${i}`,
+    amount: 10,
+    from_account_type: 'bank',
+    from_account_name: 'Checking',
+    to_account_type: 'saving',
+    to_account_name: 'Savings',
+    billing_month: '2026-01-01',
+    recurrence_months: null,
+    notes: null,
+    parent_transfer_id: null,
+    created_at: '',
+  }));
+  const secondPage = [
+    {
+      id: 'tr-last',
+      user_id: 'u1',
+      date: '2026-02-15',
+      detail: 'Last transfer',
+      amount: 25,
+      from_account_type: 'bank',
+      from_account_name: 'Checking',
+      to_account_type: 'saving',
+      to_account_name: 'Savings',
+      billing_month: '2026-02-01',
+      recurrence_months: null,
+      notes: null,
+      parent_transfer_id: null,
+      created_at: '',
+    },
+  ];
+
+  server.use(
+    http.get('/api/v1/transfers', ({ request }) => {
+      const url = new URL(request.url);
+      const limit = Number(url.searchParams.get('limit'));
+      const offset = Number(url.searchParams.get('offset'));
+      if (limit !== PAGE_SIZE) {
+        return HttpResponse.json({ detail: 'unexpected limit' }, { status: 500 });
+      }
+      if (offset === 0) return HttpResponse.json(firstPage);
+      if (offset === PAGE_SIZE) return HttpResponse.json(secondPage);
+      return HttpResponse.json([]);
+    })
+  );
+
+  const user = userEvent.setup();
+  render(<TransfersPage />, { wrapper });
+
+  await waitFor(() => expect(screen.getByText('Transfer 0')).toBeInTheDocument());
+  expect(screen.queryByText('Last transfer')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /load more/i }));
+
+  await waitFor(() => expect(screen.getByText('Last transfer')).toBeInTheDocument());
 });

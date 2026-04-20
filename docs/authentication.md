@@ -27,6 +27,7 @@ Returns a `200` with an `access_token` httpOnly cookie set. Returns `409` if the
 ```
 
 Returns `200` with `access_token` cookie. Returns `401` on invalid credentials.
+Returns `403` if `BASIC_AUTH_ENABLED=false`.
 
 ### Passwords
 
@@ -56,7 +57,7 @@ Response includes `has_password` and `has_oidc` fields (see [UserOut fields](#us
 
 ### Disabling
 
-Setting `BASIC_AUTH_ENABLED=false` disables the `/register` and `/login` endpoints. Existing basic-auth users who also have an OIDC account (same email) can still log in via OIDC. Existing basic-auth-only users cannot log in until the setting is re-enabled.
+Setting `BASIC_AUTH_ENABLED=false` disables both `/register` and `/login`. OIDC sign-in is unaffected. Password-based users cannot authenticate with email/password again until the setting is re-enabled.
 
 ---
 
@@ -90,26 +91,29 @@ The application discovers provider endpoints automatically from `{OIDC_ISSUER_UR
 2. Browser redirects to `GET /api/v1/auth/oidc/login` → backend redirects to provider authorization endpoint
 3. User authenticates at the provider
 4. Provider redirects to `OIDC_REDIRECT_URI` with an authorization code
-5. Backend exchanges the code for tokens, validates the ID token, creates or updates the user record
+5. Backend exchanges the code for tokens, validates the ID token, matches the user by `oidc_sub`, and creates a new user row if that provider subject has not been seen before
 6. Two httpOnly cookies are set:
    - `access_token` — JWT (same as basic auth)
    - `oidc_id_token` — AES-GCM encrypted raw ID token (used for RP-initiated logout)
 
 ### Logout flow
 
-`GET /api/v1/auth/oidc/logout`
+Two logout entrypoints exist:
 
-1. Clears `access_token` and `oidc_id_token` cookies
-2. If the provider advertises `end_session_endpoint` and `oidc_id_token` cookie is present, performs RP-initiated logout (redirects to provider's logout page with `id_token_hint` and `post_logout_redirect_uri`)
-3. Falls back to local-only logout if the provider does not support `end_session_endpoint` or the cookie is absent/expired
+- `POST /api/v1/auth/logout` — general logout endpoint used by API clients
+- `GET /api/v1/auth/oidc/logout` — explicit browser redirect entrypoint
+
+Both endpoints clear `access_token` and `oidc_id_token` cookies. When the provider advertises `end_session_endpoint` and the encrypted `oidc_id_token` cookie is present, they perform RP-initiated logout by redirecting to the provider with `id_token_hint` and `post_logout_redirect_uri`. If the provider does not support RP-initiated logout, or the OIDC session cookie is absent/expired, logout falls back to local-only sign-out.
 
 ---
 
 ## Account Merging
 
-Email is the merge key. A user who registered via basic auth and later logs in via OIDC with the same email gets their `oidc_sub` written to the existing row — one account, both login methods work.
+Accounts are linked by OIDC subject (`oidc_sub`), not by email.
 
-If the OIDC provider does not include an email claim, merging is not possible and a new separate user is created identified only by `oidc_sub`.
+The backend does not auto-link an incoming OIDC login to an existing password-auth account that happens to share the same email. This avoids accidental or malicious account takeover through an IdP-controlled email claim.
+
+If the OIDC provider returns a verified email and that email is not already used by another account, it is stored on the OIDC user row. If the email is missing, unverified, or already claimed by another user, the account is still created and identified only by `oidc_sub`.
 
 ---
 
@@ -142,8 +146,8 @@ These fields drive frontend behavior — for example, whether to show a password
 
 Permanently deletes the authenticated user's account and all associated data.
 
-- **Request body (JSON):** `{"password": "<current_password>"}`
-- Returns `401` if the password is wrong or absent, or if the user has no password set (OIDC-only users)
+- **Request body (JSON):** `{"password": "<current_password>"}` for password-auth accounts, or `{}` for OIDC-only accounts
+- Returns `401` if the password is wrong or absent for a password-auth account
 - On success: clears the `access_token` and `oidc_id_token` cookies and returns `{"ok": true}`
 
 **OIDC-only users** (no password set) must supply an empty `{}` body (the field is optional). They are exempt from the password check.

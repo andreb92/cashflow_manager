@@ -205,3 +205,37 @@ def test_analytics_direction_income_filter(client):
     types_debit = {row["type"] for row in r_debit.json()}
     assert "Housing" in types_debit
     assert "Salary" not in types_debit
+
+
+def test_analytics_does_not_resolve_another_users_category_metadata(client, db):
+    """Even if corrupt data points at another user's category id, analytics must not leak its labels."""
+    from app.models.user import User, gen_uuid
+    from app.models.category import Category
+    from app.models.transaction import Transaction
+
+    pm_id, _ = _setup(client)
+    bob = User(id=gen_uuid(), email="bob-analytics@example.com", name="Bob")
+    db.add(bob)
+    db.flush()
+    foreign_cat = Category(user_id=bob.id, type="Secret", sub_type="Private")
+    db.add(foreign_cat)
+    db.flush()
+    foreign_cat_id = foreign_cat.id
+    db.add(Transaction(
+        user_id=next(pm["user_id"] for pm in client.get("/api/v1/payment-methods").json() if pm["id"] == pm_id),
+        date="2026-01-10",
+        detail="Corrupt row",
+        amount=123,
+        payment_method_id=pm_id,
+        category_id=foreign_cat_id,
+        transaction_direction="debit",
+        billing_month="2026-01-01",
+    ))
+    db.commit()
+
+    r = client.get("/api/v1/analytics/categories", params={"from": "2026-01", "to": "2026-01"})
+    assert r.status_code == 200
+    row = next((x for x in r.json() if x["category_id"] == foreign_cat_id), None)
+    assert row is not None
+    assert row["type"] is None
+    assert row["sub_type"] is None

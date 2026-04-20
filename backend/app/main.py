@@ -27,8 +27,12 @@ async def lifespan(app: FastAPI):
         alembic_ini = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
         )
+        alembic_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "alembic")
+        )
         cfg = Config(alembic_ini)
         cfg.set_main_option("sqlalchemy.url", f"sqlite:///{settings.db_path}")
+        cfg.set_main_option("script_location", alembic_dir)
         command.upgrade(cfg, "head")
         SessionLocal = get_session_factory()
         db = SessionLocal()

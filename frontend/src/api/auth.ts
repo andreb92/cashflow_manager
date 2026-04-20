@@ -10,10 +10,14 @@ export const authApi = {
     apiClient.post<User>('/auth/register', { email, name, password }).then((r) => r.data),
   logout: () =>
     apiClient.post('/auth/logout'),
+  oidcLogoutUrl: () => '/api/v1/auth/oidc/logout',
   oidcLoginUrl: () => '/api/v1/auth/oidc/login',
   changePassword: (currentPassword: string, newPassword: string) =>
     apiClient.put('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
-  deleteMe: (password: string) => apiClient.delete('/users/me', { data: { password } }),
+  deleteMe: (password?: string) =>
+    apiClient.delete('/users/me', {
+      data: password === undefined ? {} : { password },
+    }),
 };
 
 export async function fetchMeOrNull(): Promise<User | null> {

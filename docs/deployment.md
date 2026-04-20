@@ -137,7 +137,7 @@ For automated backups, consider a cron job or a tool like `litestream` for conti
 
 ## User Management
 
-There is no admin panel. Users register themselves via the `/register` page when `BASIC_AUTH_ENABLED=true`. To prevent new registrations (e.g., after initial setup), set `BASIC_AUTH_ENABLED=false` — existing users can still log in via OIDC if configured.
+There is no admin panel. Users register themselves via the `/register` page when `BASIC_AUTH_ENABLED=true`. To force OIDC-only access or disable all password-based authentication, set `BASIC_AUTH_ENABLED=false`. That disables both `/register` and `/login`; OIDC sign-in continues to work if configured.
 
 To delete a user, connect to the database directly:
 

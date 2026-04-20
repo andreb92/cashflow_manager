@@ -100,7 +100,7 @@ Full reference with OIDC variables: [docs/configuration.md](docs/configuration.m
 Two modes, independently configurable:
 
 - **Basic auth** — self-registration with email + password, bcrypt-hashed
-- **OIDC** — any OIDC-compliant provider; accounts are merged by email
+- **OIDC** — any OIDC-compliant provider; users are matched by provider subject (`oidc_sub`) and are not auto-linked to existing password accounts by email
 
 Both can be active simultaneously. See [docs/authentication.md](docs/authentication.md).
 
