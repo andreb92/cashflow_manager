@@ -77,21 +77,21 @@ export default function TransferForm({ onSuccess, initial }: Props) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: (d: Fields) => {
-      const body = isEditing
-        ? {
-            date: d.date,
-            detail: d.detail,
-            amount: parseFloat(d.amount),
-            ...(d.notes ? { notes: d.notes } : {}),
-          }
-        : {
-            date: d.date, detail: d.detail, amount: parseFloat(d.amount),
-            from_account_type: d.from_account_type, from_account_name: d.from_account_name,
-            to_account_type: d.to_account_type, to_account_name: d.to_account_name,
-            ...(d.recurrence_months ? { recurrence_months: parseInt(d.recurrence_months) } : {}),
-            ...(d.notes ? { notes: d.notes } : {}),
-          };
-      return isEditing ? transfersApi.update(initial.id, body) : transfersApi.create(body);
+      if (isEditing) {
+        return transfersApi.update(initial.id, {
+          date: d.date,
+          detail: d.detail,
+          amount: parseFloat(d.amount),
+          ...(d.notes ? { notes: d.notes } : {}),
+        });
+      }
+      return transfersApi.create({
+        date: d.date, detail: d.detail, amount: parseFloat(d.amount),
+        from_account_type: d.from_account_type, from_account_name: d.from_account_name,
+        to_account_type: d.to_account_type, to_account_name: d.to_account_name,
+        ...(d.recurrence_months ? { recurrence_months: parseInt(d.recurrence_months) } : {}),
+        ...(d.notes ? { notes: d.notes } : {}),
+      });
     },
     onSuccess: () => {
       setSubmitError(null);

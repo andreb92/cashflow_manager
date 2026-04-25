@@ -130,27 +130,29 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: (data: Fields) => {
-      const body = isEditing
-        ? {
+      if (isEditing) {
+        return transactionsApi.update(
+          initial.id,
+          {
             date: data.date,
             detail: data.detail,
             amount: parseFloat(data.amount),
-            category_id: data.category_id || null,
+            category_id: data.category_id || undefined,
             ...(data.notes ? { notes: data.notes } : {}),
-          }
-        : {
-            date: data.date,
-            detail: data.detail,
-            amount: parseFloat(data.amount),
-            payment_method_id: data.payment_method_id,
-            category_id: data.category_id,
-            transaction_direction: data.transaction_direction,
-            ...(data.recurrence_months ? { recurrence_months: parseInt(data.recurrence_months) } : {}),
-            ...(data.notes ? { notes: data.notes } : {}),
-          };
-      return isEditing
-        ? transactionsApi.update(initial.id, body, initial.recurrence_months ? editCascade : undefined)
-        : transactionsApi.create(body);
+          },
+          initial.recurrence_months ? editCascade : undefined,
+        );
+      }
+      return transactionsApi.create({
+        date: data.date,
+        detail: data.detail,
+        amount: parseFloat(data.amount),
+        payment_method_id: data.payment_method_id,
+        category_id: data.category_id,
+        transaction_direction: data.transaction_direction,
+        ...(data.recurrence_months ? { recurrence_months: parseInt(data.recurrence_months) } : {}),
+        ...(data.notes ? { notes: data.notes } : {}),
+      });
     },
     onSuccess: () => {
       setSubmitError(null);
