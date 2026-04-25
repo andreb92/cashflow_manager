@@ -12,5 +12,5 @@ python-dateutil==2.9.0.post0
 pytz==2026.1.post1
 
 # dev / test
-pytest==9.0.2
+pytest==9.0.3
 pytest-cov==7.1.0
