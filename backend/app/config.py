@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000"
     tz: str = "Europe/Rome"
     development_mode: bool = False
+    cookie_secure: bool | None = None
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 

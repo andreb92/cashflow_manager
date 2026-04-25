@@ -62,7 +62,8 @@ These variables are read by Vite during the frontend build and are not used at r
 | Variable | Default | Description |
 |---|---|---|
 | `VITE_API_BASE_URL` | — | API base URL for the frontend. Only needed when running Vite's dev server against a remote backend. In production the Nginx proxy makes this unnecessary. |
-| `DEVELOPMENT_MODE` | `false` | When `true`, bypasses the startup insecure-defaults check. Required for local development when using non-production `SECRET_KEY`/`SESSION_ENCRYPTION_KEY`. |
+| `DEVELOPMENT_MODE` | `false` | When `true`, bypasses the startup insecure-defaults check and sets `COOKIE_SECURE` default to `false`. Required for local development when using non-production `SECRET_KEY`/`SESSION_ENCRYPTION_KEY`. |
+| `COOKIE_SECURE` | derived | When `true`, sets the `Secure` flag on the auth cookie (browser only sends it over HTTPS). Defaults to `true` unless `DEVELOPMENT_MODE=true`. Set to `false` when serving over plain HTTP on a non-localhost hostname (e.g. a Tailscale/LAN hostname). |
 
 ---
 

@@ -6,28 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A personal cashflow manager with a FastAPI backend and React/TypeScript frontend, containerized with Docker.
 
+## Prerequisites
+
+Python 3.14+, Node.js 22+, npm 10+.
+
 ## Commands
 
 ### Backend (from `backend/`)
 ```bash
-# Install dependencies
 pip install -r requirements.txt
 
-# Run dev server
 uvicorn app.main:app --reload --port 8000
 
-# Run all tests
-pytest
+pytest                                        # all tests
+pytest tests/test_auth.py -v                 # single file
+pytest tests/test_auth.py::test_register -v  # single test
+pytest --cov --cov-report=term-missing       # with coverage
 
-# Run a single test
-pytest tests/test_auth.py::test_register_creates_user -v
-
-# Run migrations
-alembic upgrade head
-
-# Create a new migration
-alembic revision --autogenerate -m "description"
+alembic upgrade head                         # apply migrations
+alembic revision --autogenerate -m "desc"    # new migration
+alembic current                              # check status
+alembic downgrade -1                         # rollback one step
 ```
+
+> When running the backend outside Docker, set `DB_PATH=./data/cashflow.db` in `.env`.
 
 ### Frontend (from `frontend/`)
 ```bash
@@ -38,7 +40,14 @@ npm run test         # Run tests once (Vitest)
 npm run test:watch   # Watch mode
 
 # Run a single test file
-npm run test -- tests/pages/TransactionsPage.test.tsx
+npm run test -- src/tests/transactions.test.ts
+```
+
+### E2E (from `e2e/`) — requires full app running
+```bash
+npx playwright install   # first time only
+npx playwright test
+npx playwright test --ui # interactive mode
 ```
 
 ### Docker
@@ -68,7 +77,7 @@ FastAPI app with SQLAlchemy (SQLite) and Alembic migrations.
 - **`models/`** — SQLAlchemy ORM models: `User`, `PaymentMethod`, `Transaction`, `Transfer`, `Asset`, `Category`, `SalaryConfig`, `TaxConfig`, `Forecast`, `ForecastLine`, `ForecastAdjustment`, `MainBankHistory`, `UserSetting`
 - **`routers/`** — One router per domain, all included at `/api/v1` prefix
 - **`schemas/`** — Pydantic request/response schemas (separate from ORM models)
-- **`services/`** — Business logic: `analytics`, `assets`, `auth`, `bank_balance`, `billing`, `forecasting`, `installments`, `oidc`, `recurrence`, `salary`, `seed`, `summary`, `tax`
+- **`services/`** — Business logic: `analytics`, `assets`, `auth`, `bank_balance`, `billing`, `forecasting`, `oidc`, `recurrence`, `salary`, `seed`, `summary`, `tax`
 
 All models use UUID string PKs via `gen_uuid()`. Database is SQLite at `DB_PATH` (default `/app/data/cashflow.db`).
 
@@ -94,6 +103,18 @@ React 18 + TypeScript, Vite, TanStack Query, React Hook Form + Zod.
 - `GET /api/v1/auth/me` returns the current user
 - Optional OIDC support configurable via `.env`
 
+### Onboarding Flow
+
+On first login, `AuthGuard` checks `GET /api/v1/onboarding/status`. If `complete: false`, users are redirected to `/setup` (`SetupPage`) regardless of the requested route. `SetupGuard` on the `/setup` route redirects already-onboarded users back to `/`. All authenticated routes are gated behind both guards.
+
+### Commit Convention
+
+Conventional commits are enforced — semantic-release derives versions and the changelog from them:
+- `feat:` → minor bump
+- `fix:` → patch bump
+- `feat!:` / `BREAKING CHANGE:` footer → major bump
+- `chore:`, `docs:`, `test:`, `refactor:` → no bump
+
 ### Testing Patterns
 
 **Backend:** `conftest.py` creates an in-memory SQLite DB per test and overrides `get_db` via FastAPI's dependency override system.
@@ -107,7 +128,13 @@ Vault: `~/soulwaxx_brain` (read via `mcp__obsidian-vault__*`).
 When you need context not already in this project:
 1. Read `wiki/hot.md` first — recent context, under 500 words
 2. Read `wiki/index.md` if more breadth is needed
-3. Read `wiki/*` for domain-specific context
+3. Read the relevant domain index (files are named after the domain, not `INDEX.md`):
+   - Satispay work: `wiki/satispay/satispay.md` → sub-domain e.g. `wiki/satispay/kubernetes/kubernetes.md`
+   - Personal projects: `wiki/projects/projects.md`
+   - Learning: `wiki/learning/learning.md`
+   - Reference / cheatsheets: `wiki/reference/reference.md`
+   - Concepts / entities / sources: `wiki/concepts/concepts-index.md`, `wiki/entities/entities-index.md`, `wiki/sources/sources-index.md`
 4. Only then read individual pages
 
 Do NOT consult the wiki for general coding questions or anything already in this project.
+Do NOT read `wiki/overview.md` — it duplicates `hot.md` and `index.md`.

@@ -21,7 +21,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
         httponly=True,
         samesite="lax",
         max_age=60 * 60 * 24 * settings.jwt_expire_days,
-        secure=not settings.development_mode,
+        secure=settings.cookie_secure if settings.cookie_secure is not None else not settings.development_mode,
     )
 
 
