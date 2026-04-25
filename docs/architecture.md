@@ -59,7 +59,7 @@ models/      ← SQLAlchemy ORM models
 | `SalaryConfig` | Gross salary, contract type, IRPEF deductions |
 | `TaxConfig` | Global Italian tax brackets (IRPEF, INPS rates) |
 | `Forecast` | Saved forecast scenario |
-| `ForecastLine` | Individual projection line within a forecast: `base_amount`, `billing_day`, `source_transaction_id`, `payment_method_id`, `notes` |
+| `ForecastLine` | Individual projection line within a forecast: `base_amount`, `billing_day`, `source_transaction_id`, `payment_method_id`, `notes`. `PUT /forecasts/{fc_id}/lines/{line_id}` currently follows a full-body update contract: callers must resend `detail` and `base_amount`, while optional fields such as `category_id`, `payment_method_id`, `billing_day`, and `notes` may be omitted. |
 | `ForecastAdjustment` | Per-line, date-scoped amount override: `line_id`, `month` (YYYY-MM), `amount`, `adjustment_type` (`fixed`\|`percentage`) |
 | `MainBankHistory` | Audit log of main bank account balance corrections |
 | `UserSetting` | Per-user key/value settings: `key`, `value` (used for `tracking_start_date`, `onboarding_complete`, `opening_bank_balance_*`) |
@@ -82,6 +82,8 @@ User-supplied foreign references that point at user-owned rows are validated at 
 ### Routers (all under `/api/v1`)
 
 `auth`, `onboarding`, `payment_methods`, `categories`, `salary`, `tax_config`, `transactions`, `transfers`, `summary`, `assets`, `analytics`, `forecasts`, `user_settings`, `users`
+
+`GET /auth/config` is a public capabilities endpoint used by the login page to decide whether to show password sign-in, SSO sign-in, or both.
 
 ### Services
 

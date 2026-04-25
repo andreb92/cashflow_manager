@@ -1,10 +1,11 @@
 from typing import Annotated
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.user import User, gen_uuid
-from app.schemas.auth import RegisterRequest, LoginRequest, UserOut
+from app.schemas.auth import AuthConfigOut, LoginRequest, RegisterRequest, UserOut
 from app.services.auth import hash_password, verify_password, create_access_token
 from app.config import get_settings
 
@@ -44,6 +45,21 @@ def _clear_all_auth_cookies(response: Response) -> None:
     _clear_oidc_flow_cookies(response)
 
 
+def _build_post_logout_redirect_uri(oidc_redirect_uri: str) -> str | None:
+    parsed = urlsplit(oidc_redirect_uri)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+
+    callback_suffix = "/api/v1/auth/oidc/callback"
+    if parsed.path.endswith(callback_suffix):
+        login_base = parsed.path[: -len(callback_suffix)]
+        login_path = f"{login_base}/login" if login_base else "/login"
+    else:
+        login_path = "/login"
+
+    return urlunsplit((parsed.scheme, parsed.netloc, login_path, "", ""))
+
+
 async def _build_oidc_logout_redirect(oidc_id_token: str | None) -> RedirectResponse | None:
     settings = get_settings()
     if not settings.oidc_enabled or not oidc_id_token:
@@ -56,12 +72,42 @@ async def _build_oidc_logout_redirect(oidc_id_token: str | None) -> RedirectResp
         id_token = _oidc.decrypt_cookie(oidc_id_token, settings.session_encryption_key)
         if id_token is None:
             return None
-        logout_url = f"{end_session}?id_token_hint={id_token}&post_logout_redirect_uri=/"
+
+        post_logout_redirect_uri = _build_post_logout_redirect_uri(settings.oidc_redirect_uri)
+        if post_logout_redirect_uri is None:
+            return None
+
+        parsed_end_session = urlsplit(end_session)
+        preserved_params = [
+            (key, value)
+            for key, value in parse_qsl(parsed_end_session.query, keep_blank_values=True)
+            if key not in {"id_token_hint", "post_logout_redirect_uri"}
+        ]
+        preserved_params.extend(
+            [
+                ("id_token_hint", id_token),
+                ("post_logout_redirect_uri", post_logout_redirect_uri),
+            ]
+        )
+        logout_url = urlunsplit(
+            parsed_end_session._replace(
+                query=urlencode(preserved_params, doseq=True, quote_via=quote)
+            )
+        )
         redirect = RedirectResponse(url=logout_url)
         _clear_all_auth_cookies(redirect)
         return redirect
     except Exception:
         return None
+
+
+@router.get("/config", response_model=AuthConfigOut)
+def auth_config():
+    settings = get_settings()
+    return AuthConfigOut(
+        oidc_enabled=settings.oidc_enabled,
+        basic_auth_enabled=settings.basic_auth_enabled,
+    )
 
 
 @router.post("/register", response_model=UserOut)

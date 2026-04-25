@@ -56,20 +56,50 @@ describe('forecastsApi', () => {
   });
 
   it('addLine posts and returns new line', async () => {
-    const line = { id: 'line-1', detail: 'Salary' };
+    const body = {
+      detail: 'Salary',
+      base_amount: 3200,
+      category_id: 'cat-1',
+      payment_method_id: 'pm-1',
+      billing_day: 5,
+      notes: 'Recurring',
+    };
+    const line = { id: 'line-1', ...body, adjustments: [] };
+    let receivedBody: unknown;
     server.use(
-      http.post('/api/v1/forecasts/fc-1/lines', () => HttpResponse.json(line))
+      http.post('/api/v1/forecasts/fc-1/lines', async ({ request }) => {
+        receivedBody = await request.json();
+        return HttpResponse.json(line);
+      })
     );
-    const result = await forecastsApi.addLine('fc-1', { detail: 'Salary' });
+    const result = await forecastsApi.addLine('fc-1', body);
+    expect(receivedBody).toEqual(body);
     expect(result).toEqual(line);
   });
 
   it('updateLine puts and returns updated line', async () => {
-    const line = { id: 'line-1', detail: 'Updated Salary' };
+    const body = {
+      detail: 'Updated Salary',
+      base_amount: 3500,
+      category_id: 'cat-1',
+      payment_method_id: 'pm-1',
+      billing_day: 10,
+      notes: null,
+    };
+    const line = {
+      id: 'line-1',
+      ...body,
+      adjustments: [{ id: 'adj-1', valid_from: '2026-06-01', new_amount: 3600, adjustment_type: 'fixed' }],
+    };
+    let receivedBody: unknown;
     server.use(
-      http.put('/api/v1/forecasts/fc-1/lines/line-1', () => HttpResponse.json(line))
+      http.put('/api/v1/forecasts/fc-1/lines/line-1', async ({ request }) => {
+        receivedBody = await request.json();
+        return HttpResponse.json(line);
+      })
     );
-    const result = await forecastsApi.updateLine('fc-1', 'line-1', { detail: 'Updated Salary' });
+    const result = await forecastsApi.updateLine('fc-1', 'line-1', body);
+    expect(receivedBody).toEqual(body);
     expect(result).toEqual(line);
   });
 

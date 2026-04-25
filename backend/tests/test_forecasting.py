@@ -173,11 +173,13 @@ def test_update_line(client):
         "detail": "Old name", "base_amount": 200.0,
     }).json()["id"]
     r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json={
-        "detail": "New name", "base_amount": 300.0,
+        "detail": "New name", "base_amount": 300.0, "billing_day": 20, "notes": "Updated",
     })
     assert r.status_code == 200
     assert r.json()["detail"] == "New name"
     assert r.json()["base_amount"] == 300.0
+    assert r.json()["billing_day"] == 20
+    assert r.json()["notes"] == "Updated"
 
 
 @pytest.mark.parametrize("field_name", ["category_id", "payment_method_id"])
@@ -189,13 +191,36 @@ def test_update_line_rejects_foreign_owned_ids(client, field_name):
         "category_id": alice_cat_id, "payment_method_id": alice_pm_id,
     }).json()["id"]
     foreign_pm_id, foreign_cat_id = _foreign_assets(client)
-    payload = {}
+    payload = {
+        "detail": "Own line updated",
+        "base_amount": 225.0,
+        "billing_day": 15,
+        "notes": "updated",
+        "category_id": alice_cat_id,
+        "payment_method_id": alice_pm_id,
+    }
     if field_name == "category_id":
         payload["category_id"] = foreign_cat_id
     else:
         payload["payment_method_id"] = foreign_pm_id
     r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json=payload)
     assert r.status_code == 422
+
+
+def test_update_line_requires_full_body(client):
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
+    line_id = client.post(f"/api/v1/forecasts/{fc_id}/lines", json={
+        "detail": "Own line", "base_amount": 200.0,
+    }).json()["id"]
+
+    r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json={
+        "payment_method_id": None,
+    })
+    assert r.status_code == 422
+    errors = {(err["loc"][-1], err["type"]) for err in r.json()["detail"]}
+    assert ("detail", "missing") in errors
+    assert ("base_amount", "missing") in errors
 
 
 def test_update_line_response_includes_adjustments(client):
@@ -210,7 +235,7 @@ def test_update_line_response_includes_adjustments(client):
         "valid_from": "2027-06-01", "new_amount": 150.0,
     })
     r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}", json={
-        "detail": "Expense updated", "base_amount": 120.0,
+        "detail": "Expense updated", "base_amount": 120.0, "billing_day": 12,
     })
     assert r.status_code == 200
     body = r.json()
@@ -223,7 +248,7 @@ def test_update_line_not_found(client):
     _setup(client)
     fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 1}).json()["id"]
     r = client.put(f"/api/v1/forecasts/{fc_id}/lines/nonexistent-line-id", json={
-        "detail": "Ghost", "base_amount": 50.0,
+        "detail": "Ghost", "base_amount": 50.0, "billing_day": 1,
     })
     assert r.status_code == 404
 

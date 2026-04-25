@@ -2,6 +2,25 @@ import pytest
 from app.config import get_settings, Settings
 
 
+def test_auth_config_is_public_and_reflects_flags(client):
+    import os
+
+    os.environ["OIDC_ENABLED"] = "true"
+    os.environ["BASIC_AUTH_ENABLED"] = "false"
+    get_settings.cache_clear()
+    try:
+        resp = client.get("/api/v1/auth/config")
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "oidc_enabled": True,
+            "basic_auth_enabled": False,
+        }
+    finally:
+        os.environ.pop("OIDC_ENABLED", None)
+        os.environ.pop("BASIC_AUTH_ENABLED", None)
+        get_settings.cache_clear()
+
+
 def test_register_creates_user(client):
     resp = client.post("/api/v1/auth/register", json={"email": "a@b.com", "password": "pass1234", "name": "Alice"})
     assert resp.status_code == 200
@@ -47,6 +66,7 @@ def test_logout_clears_cookie(client):
 
 def test_logout_with_oidc_id_token_redirects_to_provider_end_session(client):
     import os
+    from urllib.parse import parse_qs, urlparse
     from unittest.mock import patch, AsyncMock
     from app.config import get_settings
     from app.services.oidc import encrypt_cookie
@@ -64,13 +84,17 @@ def test_logout_with_oidc_id_token_redirects_to_provider_end_session(client):
         discovery = {
             "authorization_endpoint": "https://example.com/auth",
             "token_endpoint": "https://example.com/token",
-            "end_session_endpoint": "https://example.com/logout",
+            "end_session_endpoint": "https://example.com/logout?provider=auth0",
         }
         with patch("app.routers.auth._oidc.discover_endpoints", AsyncMock(return_value=discovery)):
             resp = client.post("/api/v1/auth/logout", follow_redirects=False)
         assert resp.status_code in (302, 307)
-        assert "https://example.com/logout" in resp.headers["location"]
-        assert "id_token_hint=raw-id-token" in resp.headers["location"]
+        parsed = urlparse(resp.headers["location"])
+        assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://example.com/logout"
+        params = parse_qs(parsed.query)
+        assert params["provider"] == ["auth0"]
+        assert params["id_token_hint"] == ["raw-id-token"]
+        assert params["post_logout_redirect_uri"] == ["http://localhost:8000/login"]
     finally:
         for key in ("OIDC_ENABLED", "OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI", "SESSION_ENCRYPTION_KEY"):
             os.environ.pop(key, None)

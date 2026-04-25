@@ -26,6 +26,13 @@ export default function ForecastGrid({ projection, onAddAdjustment }: Props) {
         <tbody>
           {projection.lines.map((line) => {
             const lineTotal = line.months.reduce((s, m) => s + m.effective_amount, 0);
+            const firstAdjustmentValidFrom = line.adjustments.reduce<string | null>(
+              (earliest, adjustment) =>
+                earliest === null || adjustment.valid_from < earliest
+                  ? adjustment.valid_from
+                  : earliest,
+              null
+            );
             return (
               <tr key={line.line_id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10">
                 <td className="p-2 border border-line sticky left-0 bg-surface text-primary">
@@ -40,7 +47,7 @@ export default function ForecastGrid({ projection, onAddAdjustment }: Props) {
                   )}
                 </td>
                 {line.months.map((cell) => {
-                  const hasAdj = line.adjustments.some((a) => a.valid_from <= cell.month);
+                  const hasAdj = firstAdjustmentValidFrom !== null && firstAdjustmentValidFrom <= cell.month;
                   return (
                     <td key={cell.month} className={`p-2 border border-line text-right tabular-nums text-primary ${hasAdj ? 'text-yellow-700 dark:text-yellow-400 font-medium' : ''}`}>
                       {fmt(cell.effective_amount)}
