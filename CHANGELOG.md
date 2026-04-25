@@ -1,3 +1,10 @@
+## [1.4.3](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.2...v1.4.3) (2026-04-25)
+
+
+### Bug Fixes
+
+* add if/else in transaction forms ([acaae5e](https://github.com/soulwaxx/cashflow_manager/commit/acaae5e504855db9b9cb5d8e453c7c0f2465bfbc))
+
 # [1.4.0](https://github.com/soulwaxx/cashflow_manager/compare/v1.3.0...v1.4.0) (2026-04-19)
 
 
