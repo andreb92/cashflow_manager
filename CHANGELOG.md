@@ -1,3 +1,10 @@
+## [1.4.4](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.3...v1.4.4) (2026-04-25)
+
+
+### Bug Fixes
+
+* hide sso button if disabled at env level ([179e402](https://github.com/soulwaxx/cashflow_manager/commit/179e402e4e9c752a6f9cd80e5a319c613d949dc8))
+
 ## [1.4.3](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.2...v1.4.3) (2026-04-25)
 
 

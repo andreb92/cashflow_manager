@@ -1,6 +1,12 @@
 import { http, HttpResponse } from 'msw';
 
 export const handlers = [
+  http.get('/api/v1/auth/config', () =>
+    HttpResponse.json({
+      oidc_enabled: true,
+      basic_auth_enabled: true,
+    })
+  ),
   http.get('/api/v1/auth/me', () =>
     HttpResponse.json({
       id: 'user-1',
