@@ -1,4 +1,5 @@
 import pytest
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -68,18 +69,22 @@ def test_oidc_logout_reads_id_token_from_cookie(oidc_client):
     discovery = {
         "authorization_endpoint": "https://example.com/auth",
         "token_endpoint": "https://example.com/token",
-        "end_session_endpoint": "https://example.com/end-session",
+        "end_session_endpoint": "https://example.com/end-session?logout_hint=keep-me",
     }
     from app.services.oidc import encrypt_cookie
-    encrypted = encrypt_cookie("raw-id-token", "a" * 64)
+    encrypted = encrypt_cookie("raw id/token+?", "a" * 64)
     oidc_client.cookies.set("oidc_id_token", encrypted)
     with patch("app.services.oidc.discover_endpoints", return_value=discovery):
         resp = oidc_client.get("/api/v1/auth/oidc/logout")
     oidc_client.cookies.delete("oidc_id_token")
     # Should redirect to end_session_endpoint with id_token_hint
     assert resp.status_code in (302, 307)
-    assert "end-session" in resp.headers["location"]
-    assert "raw-id-token" in resp.headers["location"]
+    parsed = urlparse(resp.headers["location"])
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://example.com/end-session"
+    params = parse_qs(parsed.query)
+    assert params["logout_hint"] == ["keep-me"]
+    assert params["id_token_hint"] == ["raw id/token+?"]
+    assert params["post_logout_redirect_uri"] == ["http://localhost:8000/login"]
 
 
 def test_aes_encrypt_decrypt_roundtrip():

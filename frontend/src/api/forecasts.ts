@@ -1,5 +1,11 @@
 import { apiClient } from './client';
-import type { Forecast, ForecastProjection, ForecastLine, ForecastAdjustment } from '../types/api';
+import type {
+  Forecast,
+  ForecastProjection,
+  ForecastLine,
+  ForecastLineRequest,
+  ForecastAdjustment,
+} from '../types/api';
 
 export const forecastsApi = {
   list: () =>
@@ -16,9 +22,9 @@ export const forecastsApi = {
   projection: (id: string) =>
     apiClient.get<ForecastProjection>(`/forecasts/${id}/projection`).then((r) => r.data),
 
-  addLine: (id: string, body: Partial<ForecastLine>) =>
+  addLine: (id: string, body: ForecastLineRequest) =>
     apiClient.post<ForecastLine>(`/forecasts/${id}/lines`, body).then((r) => r.data),
-  updateLine: (id: string, lineId: string, body: Partial<ForecastLine>) =>
+  updateLine: (id: string, lineId: string, body: ForecastLineRequest) =>
     apiClient.put<ForecastLine>(`/forecasts/${id}/lines/${lineId}`, body).then((r) => r.data),
   deleteLine: (id: string, lineId: string) =>
     apiClient.delete(`/forecasts/${id}/lines/${lineId}`),

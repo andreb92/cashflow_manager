@@ -108,7 +108,7 @@ npm run test -- src/tests/transactions.test.ts   # single file
 ```
 
 Tests use Vitest + Testing Library. API calls are mocked with MSW (Mock Service Worker).
-The current suite is green at `143 passed`. In jsdom, logout redirects still emit harmless "navigation to another Document" warnings because the browser environment is mocked.
+The current suite is green at `148 passed`. In jsdom, logout redirects still emit harmless "navigation to another Document" warnings because the browser environment is mocked.
 
 ### E2E (Playwright)
 
