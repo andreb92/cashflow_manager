@@ -7,6 +7,11 @@ export interface User {
   has_oidc: boolean;
 }
 
+export interface AuthConfig {
+  oidc_enabled: boolean;
+  basic_auth_enabled: boolean;
+}
+
 // Payment Methods
 export interface PaymentMethod {
   id: string;
@@ -173,21 +178,33 @@ export interface Forecast {
 
 export interface ForecastLine {
   id: string;
-  source_transaction_id: string | null;
-  category_id: string | null;
   detail: string;
+  category_id: string | null;
   base_amount: number;
-  payment_method_id: string | null;
   billing_day: number;
+  payment_method_id: string | null;
   notes: string | null;
+  adjustments: ForecastLineAdjustment[];
 }
 
-export interface ForecastAdjustment {
+export interface ForecastLineRequest {
+  detail: string;
+  base_amount: number;
+  category_id?: string | null;
+  payment_method_id?: string | null;
+  billing_day?: number;
+  notes?: string | null;
+}
+
+export interface ForecastLineAdjustment {
   id: string;
-  forecast_line_id: string;
   valid_from: string;
   new_amount: number;
   adjustment_type: 'fixed' | 'percentage';
+}
+
+export interface ForecastAdjustment extends ForecastLineAdjustment {
+  forecast_line_id: string;
 }
 
 export interface ForecastProjection {
@@ -201,7 +218,7 @@ export interface ForecastProjection {
     category_id: string | null;
     base_amount: number;
     billing_day: number;
-    adjustments: ForecastAdjustment[];
+    adjustments: ForecastLineAdjustment[];
     months: Array<{ month: string; effective_amount: number }>;
   }>;
   monthly_totals: Array<{ month: string; total: number }>;

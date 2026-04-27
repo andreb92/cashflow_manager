@@ -41,7 +41,7 @@ These have no safe default and **must** be set in production.
 | `OIDC_ISSUER_URL` | — | Base URL of the OIDC provider, e.g. `https://auth.example.com/realms/myrealm/`. Must include trailing slash. Used for OIDC discovery (appends `.well-known/openid-configuration`). |
 | `OIDC_CLIENT_ID` | — | Client ID registered with the OIDC provider. |
 | `OIDC_CLIENT_SECRET` | — | Client secret. |
-| `OIDC_REDIRECT_URI` | — | Callback URL that the OIDC provider redirects to after authentication. Must be registered with the provider. Example: `https://cashflow.example.com/api/v1/auth/oidc/callback`. |
+| `OIDC_REDIRECT_URI` | — | Callback URL that the OIDC provider redirects to after authentication. Must be registered with the provider. Example: `https://cashflow.example.com/api/v1/auth/oidc/callback`. The logout flow also uses this value to derive the absolute post-logout return target (typically `/login` on the same origin). |
 
 ---
 

@@ -55,6 +55,16 @@ The "Change password" button in **Settings → Account** is visible only to user
 
 Response includes `has_password` and `has_oidc` fields (see [UserOut fields](#userout-fields) below).
 
+### Public auth config
+
+`GET /api/v1/auth/config` — public endpoint used by the login page to discover which sign-in methods are enabled.
+
+Response:
+
+```json
+{ "oidc_enabled": true, "basic_auth_enabled": true }
+```
+
 ### Disabling
 
 Setting `BASIC_AUTH_ENABLED=false` disables both `/register` and `/login`. OIDC sign-in is unaffected. Password-based users cannot authenticate with email/password again until the setting is re-enabled.
@@ -87,7 +97,9 @@ The application discovers provider endpoints automatically from `{OIDC_ISSUER_UR
 
 ### Login flow
 
-1. User clicks "Login with SSO"
+The login page reads `GET /api/v1/auth/config` and only shows the SSO entrypoint when `oidc_enabled=true`. When `basic_auth_enabled=false`, the email/password form is hidden and the page explains that password sign-in is disabled for the instance.
+
+1. User clicks "Sign in with SSO"
 2. Browser redirects to `GET /api/v1/auth/oidc/login` → backend redirects to provider authorization endpoint
 3. User authenticates at the provider
 4. Provider redirects to `OIDC_REDIRECT_URI` with an authorization code
@@ -104,6 +116,8 @@ Two logout entrypoints exist:
 - `GET /api/v1/auth/oidc/logout` — explicit browser redirect entrypoint
 
 Both endpoints clear `access_token` and `oidc_id_token` cookies. When the provider advertises `end_session_endpoint` and the encrypted `oidc_id_token` cookie is present, they perform RP-initiated logout by redirecting to the provider with `id_token_hint` and `post_logout_redirect_uri`. If the provider does not support RP-initiated logout, or the OIDC session cookie is absent/expired, logout falls back to local-only sign-out.
+
+The logout redirect is built from `OIDC_REDIRECT_URI`: the backend derives an absolute `/login` return URL from that callback origin, preserves any existing provider query parameters on `end_session_endpoint`, and percent-encodes the injected logout parameters. If endpoint discovery, token decryption, or redirect construction fails, logout degrades to local-only sign-out instead of breaking the session flow.
 
 ---
 

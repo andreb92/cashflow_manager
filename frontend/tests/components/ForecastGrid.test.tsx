@@ -49,3 +49,38 @@ test('ForecastGrid shows yearly total', () => {
   );
   expect(screen.getAllByText(/10\.800/).length).toBeGreaterThan(0);
 });
+
+test('ForecastGrid highlights months after the first adjustment threshold', () => {
+  const qc = new QueryClient();
+  const projectionWithAdjustment: ForecastProjection = {
+    ...projection,
+    lines: [
+      {
+        ...projection.lines[0],
+        adjustments: [
+          { id: 'adj-2', valid_from: '2026-02-01', new_amount: 950, adjustment_type: 'fixed' },
+          { id: 'adj-1', valid_from: '2026-01-01', new_amount: 925, adjustment_type: 'fixed' },
+        ],
+        months: [
+          { month: '2026-01', effective_amount: 900 },
+          { month: '2026-02', effective_amount: 925 },
+        ],
+      },
+    ],
+    monthly_totals: [
+      { month: '2026-01', total: 900 },
+      { month: '2026-02', total: 925 },
+    ],
+    yearly_totals: [{ year: 2026, total: 1825 }],
+  };
+
+  const { container } = render(
+    <QueryClientProvider client={qc}>
+      <ForecastGrid projection={projectionWithAdjustment} onAddAdjustment={() => {}} />
+    </QueryClientProvider>
+  );
+
+  const highlightedCells = container.querySelectorAll('tbody td.text-yellow-700.font-medium');
+  expect(highlightedCells).toHaveLength(1);
+  expect(highlightedCells[0]).toHaveTextContent('925,00');
+});

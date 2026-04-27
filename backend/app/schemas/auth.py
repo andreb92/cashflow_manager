@@ -20,6 +20,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class AuthConfigOut(BaseModel):
+    oidc_enabled: bool
+    basic_auth_enabled: bool
+
+
 class UserOut(BaseModel):
     id: str
     email: Optional[str]

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
-import { authApi } from '../../src/api/auth';
+import { authApi, fetchAuthConfigOrLegacy } from '../../src/api/auth';
 
 describe('authApi - additional coverage', () => {
   it('logout posts to /auth/logout', async () => {
@@ -17,6 +17,35 @@ describe('authApi - additional coverage', () => {
 
   it('oidcLogoutUrl returns the OIDC logout path string', () => {
     expect(authApi.oidcLogoutUrl()).toBe('/api/v1/auth/oidc/logout');
+  });
+
+  it('config gets auth feature flags', async () => {
+    server.use(
+      http.get('/api/v1/auth/config', () =>
+        HttpResponse.json({
+          oidc_enabled: false,
+          basic_auth_enabled: true,
+        })
+      )
+    );
+
+    await expect(authApi.config()).resolves.toEqual({
+      oidc_enabled: false,
+      basic_auth_enabled: true,
+    });
+  });
+
+  it('fetchAuthConfigOrLegacy falls back when auth config is not available yet', async () => {
+    server.use(
+      http.get('/api/v1/auth/config', () =>
+        HttpResponse.json({ detail: 'Not found' }, { status: 404 })
+      )
+    );
+
+    await expect(fetchAuthConfigOrLegacy()).resolves.toEqual({
+      oidc_enabled: true,
+      basic_auth_enabled: true,
+    });
   });
 
   it('deleteMe calls DELETE /users/me with password', async () => {
