@@ -14,6 +14,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 COOKIE_NAME = "access_token"
 
 
+def _should_use_secure_cookies() -> bool:
+    settings = get_settings()
+    return (
+        settings.cookie_secure
+        if settings.cookie_secure is not None
+        else not settings.development_mode
+    )
+
+
 def _set_auth_cookie(response: Response, token: str) -> None:
     settings = get_settings()
     response.set_cookie(
@@ -22,7 +31,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
         httponly=True,
         samesite="lax",
         max_age=60 * 60 * 24 * settings.jwt_expire_days,
-        secure=settings.cookie_secure if settings.cookie_secure is not None else not settings.development_mode,
+        secure=_should_use_secure_cookies(),
     )
 
 
@@ -198,15 +207,35 @@ async def oidc_login(response: Response):
     endpoints = await _oidc.discover_endpoints(settings.oidc_issuer_url)
     state = _secrets.token_urlsafe(16)
     nonce = _secrets.token_urlsafe(16)
-    auth_url = (
-        f"{endpoints['authorization_endpoint']}"
-        f"?response_type=code&client_id={settings.oidc_client_id}"
-        f"&redirect_uri={settings.oidc_redirect_uri}"
-        f"&scope=openid+email+profile&state={state}&nonce={nonce}"
+    auth_query = urlencode(
+        {
+            "response_type": "code",
+            "client_id": settings.oidc_client_id,
+            "redirect_uri": settings.oidc_redirect_uri,
+            "scope": "openid email profile",
+            "state": state,
+            "nonce": nonce,
+        },
+        quote_via=quote,
     )
+    auth_url = f"{endpoints['authorization_endpoint']}?{auth_query}"
     redirect = RedirectResponse(url=auth_url)
-    redirect.set_cookie(key=OIDC_STATE_COOKIE, value=state, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
-    redirect.set_cookie(key=OIDC_NONCE_COOKIE, value=nonce, httponly=True, samesite="lax", max_age=600, secure=not settings.development_mode)
+    redirect.set_cookie(
+        key=OIDC_STATE_COOKIE,
+        value=state,
+        httponly=True,
+        samesite="lax",
+        max_age=600,
+        secure=_should_use_secure_cookies(),
+    )
+    redirect.set_cookie(
+        key=OIDC_NONCE_COOKIE,
+        value=nonce,
+        httponly=True,
+        samesite="lax",
+        max_age=600,
+        secure=_should_use_secure_cookies(),
+    )
     return redirect
 
 
@@ -288,7 +317,13 @@ async def oidc_callback(
     _set_auth_cookie(redirect, token)
     if tokens.get("id_token"):
         enc = _oidc.encrypt_cookie(tokens["id_token"], settings.session_encryption_key)
-        redirect.set_cookie(key=OIDC_ID_TOKEN_COOKIE, value=enc, httponly=True, samesite="lax", secure=not settings.development_mode)
+        redirect.set_cookie(
+            key=OIDC_ID_TOKEN_COOKIE,
+            value=enc,
+            httponly=True,
+            samesite="lax",
+            secure=_should_use_secure_cookies(),
+        )
     _clear_oidc_flow_cookies(redirect)
     return redirect
 
