@@ -1,3 +1,10 @@
+## [1.4.5](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.4...v1.4.5) (2026-04-29)
+
+
+### Bug Fixes
+
+* harden OIDC cookie handling and split frontend route bundles ([#39](https://github.com/soulwaxx/cashflow_manager/issues/39)) ([2da3b7b](https://github.com/soulwaxx/cashflow_manager/commit/2da3b7b1d7b954089543abbdfcde7fd1c8e30f05))
+
 ## [1.4.4](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.3...v1.4.4) (2026-04-25)
 
 
