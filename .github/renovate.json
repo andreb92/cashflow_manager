@@ -1,13 +1,38 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
+  "enabledManagers": [
+    "github-actions",
+    "npm",
+    "pip_requirements",
+    "dockerfile",
+    "docker-compose"
+  ],
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
-  "schedule": ["every weekend"],
+  "timezone": "Europe/Rome",
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 6,
+  "prHourlyLimit": 2,
+  "dependencyDashboard": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 4-6 * * 6"],
+    "automerge": true
+  },
   "packageRules": [
     {
-      "matchManagers": ["pip_requirements", "npm"],
+      "matchManagers": ["pip_requirements"],
       "matchUpdateTypes": ["patch"],
+      "groupName": "backend patch dependencies",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "frontend/e2e patch dependencies",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
@@ -18,7 +43,12 @@
       "automerge": false
     },
     {
-      "matchManagers": ["dockerfile"],
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
       "groupName": "Docker base images",
       "automerge": false
     }

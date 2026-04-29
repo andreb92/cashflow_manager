@@ -2,24 +2,30 @@ name: Renovate
 
 on:
   schedule:
-    # Every Saturday at 03:00 UTC — matches "every weekend" in renovate.json
+    # Every Saturday at 03:00 UTC
     - cron: "0 3 * * 6"
   workflow_dispatch: # Allow manual trigger from the Actions tab
+
+concurrency:
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   renovate:
     name: Renovate dependency updates
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
 
       - uses: renovatebot/github-action@v46.1.10
         with:
           configurationFile: .github/renovate.json
+          # Keep using a PAT; GITHUB_TOKEN does not provide reliable PR/CI triggering for self-hosted Renovate.
           token: ${{ secrets.RENOVATE_TOKEN }}
-        env:
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
-          RENOVATE_REPOSITORIES: ${{ github.repository }}

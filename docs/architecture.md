@@ -177,7 +177,7 @@ OIDC users are matched by `oidc_sub` only; sharing a verified email with an exis
 
 - **CI** (`.github/workflows/ci.yml`) — runs on every push and PR; executes backend (pytest) and frontend (Vitest) test suites with coverage
 - **Release** (`.github/workflows/release.yml`) — triggers after CI passes on `main`; uses semantic-release to determine version from conventional commits, builds a multi-arch Docker image (amd64 + arm64), pushes to GHCR, and updates `deploy/docker-compose.yml` with the new image tag
-- **Renovate** (`.github/renovate.json`) — weekly dependency updates; patches auto-merged, majors/minors require manual review
+- **Renovate** (`.github/renovate.json`) — scheduled weekly dependency updates with explicit manager scope (`npm`, `pip_requirements`, Docker, GitHub Actions), grouped patch PRs for backend/frontend, and a dependency dashboard; majors/minors and infrastructure updates require manual review
 
 ### Image registry
 
