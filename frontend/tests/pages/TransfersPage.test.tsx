@@ -126,6 +126,38 @@ test('Transfer edit form only exposes backend-supported fields', async () => {
   expect(requestBody).not.toHaveProperty('recurrence_months');
 });
 
+
+test('Transfer edit updates amount value', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown = null;
+
+  server.use(
+    http.put('/api/v1/transfers/tr1', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({
+        ...mockTransfers[0],
+        amount: 650,
+      });
+    })
+  );
+
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+
+  const transferRow = screen.getByText('Savings deposit').closest('li')!;
+  await user.click(within(transferRow).getByRole('button', { name: /edit/i }));
+
+  const amountInput = screen.getByLabelText(/amount/i);
+  await user.clear(amountInput);
+  await user.type(amountInput, '650');
+  await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).toMatchObject({
+    amount: 650,
+  });
+});
+
 test('TransfersPage loads additional transfer pages on demand', async () => {
   const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => ({
     id: `tr-${i}`,
