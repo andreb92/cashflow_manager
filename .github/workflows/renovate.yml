@@ -29,3 +29,6 @@ jobs:
           configurationFile: .github/renovate.json
           # Keep using a PAT; GITHUB_TOKEN does not provide reliable PR/CI triggering for self-hosted Renovate.
           token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          # Required for container-mode runs; otherwise Renovate starts with no target repository.
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
