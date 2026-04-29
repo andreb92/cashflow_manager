@@ -55,10 +55,33 @@ def test_oidc_login_redirects(oidc_client):
     with patch("app.services.oidc.discover_endpoints", return_value=discovery):
         resp = oidc_client.get("/api/v1/auth/oidc/login")
     assert resp.status_code in (302, 307)
-    assert "https://example.com/auth" in resp.headers["location"]
-    assert "nonce=" in resp.headers["location"]
+    parsed = urlparse(resp.headers["location"])
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://example.com/auth"
+    params = parse_qs(parsed.query)
+    assert params["response_type"] == ["code"]
+    assert params["client_id"] == ["client-id"]
+    assert params["redirect_uri"] == ["http://localhost:8000/api/v1/auth/oidc/callback"]
+    assert params["scope"] == ["openid email profile"]
+    assert "state" in params and params["state"][0]
+    assert "nonce" in params and params["nonce"][0]
     assert oidc_client.cookies.get("oidc_state")
     assert oidc_client.cookies.get("oidc_nonce")
+
+
+def test_oidc_login_respects_cookie_secure_override(oidc_client, monkeypatch):
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    get_settings.cache_clear()
+    discovery = {
+        "authorization_endpoint": "https://example.com/auth",
+        "token_endpoint": "https://example.com/token",
+        "end_session_endpoint": "https://example.com/logout",
+    }
+    with patch("app.services.oidc.discover_endpoints", return_value=discovery):
+        resp = oidc_client.get("/api/v1/auth/oidc/login")
+
+    set_cookie_headers = resp.headers.get_list("set-cookie")
+    assert any("oidc_state=" in h and "Secure" in h for h in set_cookie_headers)
+    assert any("oidc_nonce=" in h and "Secure" in h for h in set_cookie_headers)
 
 
 def test_oidc_logout_reads_id_token_from_cookie(oidc_client):

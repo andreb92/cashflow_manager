@@ -16,6 +16,7 @@ export default function TransferList() {
   const [addOpen, setAddOpen] = useState(false);
   const [editTr, setEditTr] = useState<Transfer | null>(null);
   const [deleteTr, setDeleteTr] = useState<Transfer | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const {
     data,
@@ -36,10 +37,22 @@ export default function TransferList() {
     mutationFn: ({ id, cascade }: { id: string; cascade: string }) =>
       transfersApi.delete(id, cascade),
     onSuccess: () => {
+      setDeleteError(null);
       qc.invalidateQueries({ queryKey: ['transfers'] });
       qc.invalidateQueries({ queryKey: ['summary'] });
       qc.invalidateQueries({ queryKey: ['assets'] });
       setDeleteTr(null);
+    },
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: unknown } } };
+      const detail = axiosErr?.response?.data?.detail;
+      setDeleteError(
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+          ? detail.map((d: { msg?: string }) => d.msg ?? String(d)).join('; ')
+          : 'Failed to delete transfer. Please retry.'
+      );
     },
   });
 
@@ -51,6 +64,11 @@ export default function TransferList() {
         <h2 className="font-semibold text-secondary">Transfers</h2>
         <Button onClick={() => setAddOpen(true)}>+ Add transfer</Button>
       </div>
+      {deleteError && (
+        <p className="mb-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">
+          {deleteError}
+        </p>
+      )}
       <ul className="bg-surface rounded-lg border border-line divide-y divide-line text-sm">
         {transfers.length === 0 && <li className="p-4 text-faint">No transfers</li>}
         {transfers.map((tr) => (
@@ -67,7 +85,16 @@ export default function TransferList() {
             <Badge color="blue">€{fmt(tr.amount)}</Badge>
             <div className="flex gap-1">
               <Button variant="ghost" className="text-xs px-2" onClick={() => setEditTr(tr)}>Edit</Button>
-              <Button variant="ghost" className="text-xs px-2 text-red-500" onClick={() => setDeleteTr(tr)}>Delete</Button>
+              <Button
+                variant="ghost"
+                className="text-xs px-2 text-red-500"
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteTr(tr);
+                }}
+              >
+                Delete
+              </Button>
             </div>
           </li>
         ))}

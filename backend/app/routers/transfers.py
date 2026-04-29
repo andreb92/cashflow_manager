@@ -22,6 +22,30 @@ def _resolve_pm_id(db: Session, user_id: str, account_type: str, account_name: s
     pm = db.query(PaymentMethod).filter_by(user_id=user_id, name=account_name).first()
     return pm.id if pm else None
 
+
+def _promote_transfer_series_root_if_needed(db: Session, user_id: str, transfer: Transfer) -> None:
+    """When deleting a recurring root as single, promote the next row to root.
+
+    Without this, deleting the root can violate the self-FK because children still
+    reference the deleted id.
+    """
+    if transfer.parent_transfer_id is not None:
+        return
+
+    children = (
+        db.query(Transfer)
+        .filter_by(user_id=user_id, parent_transfer_id=transfer.id)
+        .order_by(Transfer.date.asc(), Transfer.created_at.asc(), Transfer.id.asc())
+        .all()
+    )
+    if not children:
+        return
+
+    new_root = children[0]
+    new_root.parent_transfer_id = None
+    for child in children[1:]:
+        child.parent_transfer_id = new_root.id
+
 @router.get("")
 def list_transfers(
     billing_month: Optional[str] = None,
@@ -38,7 +62,8 @@ def list_transfers(
         q = q.filter_by(from_account_name=from_account)
     if to_account:
         q = q.filter_by(to_account_name=to_account)
-    q = q.order_by(Transfer.date.desc()).offset(offset)
+    # Keep pagination stable when many rows share the same date.
+    q = q.order_by(Transfer.date.desc(), Transfer.created_at.desc(), Transfer.id.desc()).offset(offset)
     if limit is not None:
         q = q.limit(limit)
     return q.all()
@@ -152,6 +177,7 @@ def delete_transfer(
             Transfer.date >= t.date,
         ).filter_by(user_id=current_user.id).all()
     else:
+        _promote_transfer_series_root_if_needed(db, current_user.id, t)
         to_del = [t]
     for row in to_del:
         db.delete(row)

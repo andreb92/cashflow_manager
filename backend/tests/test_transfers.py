@@ -51,6 +51,27 @@ def test_delete_single_transfer(client):
     assert client.get(f"/api/v1/transfers/{tx_id}").status_code == 404
 
 
+def test_delete_single_recurring_root_promotes_next_row(client):
+    _setup(client)
+    root_id = client.post("/api/v1/transfers", json={
+        "date": "2026-01-01", "amount": 200,
+        "from_account_type": "bank", "from_account_name": "MyBank",
+        "to_account_type": "saving", "to_account_name": "MySavings",
+        "recurrence_months": 3,
+    }).json()["id"]
+
+    r = client.delete(f"/api/v1/transfers/{root_id}", params={"cascade": "single"})
+    assert r.status_code == 200
+    assert client.get(f"/api/v1/transfers/{root_id}").status_code == 404
+
+    remaining = sorted(client.get("/api/v1/transfers").json(), key=lambda t: t["date"])
+    assert len(remaining) == 2
+    promoted_root = remaining[0]
+    assert promoted_root["parent_transfer_id"] is None
+    for row in remaining[1:]:
+        assert row["parent_transfer_id"] == promoted_root["id"]
+
+
 def test_list_transfers_filter_by_billing_month(client):
     _setup(client)
     client.post("/api/v1/transfers", json={

@@ -29,6 +29,30 @@ def _ensure_category_owned_by_user(db, category_id, user_id):
         raise HTTPException(422, "category_id not found")
     return category
 
+
+def _promote_transaction_series_root_if_needed(db: Session, user_id: str, tx: Transaction) -> None:
+    """When deleting a recurring root as single, promote the next row to root.
+
+    Without this, deleting the root can violate the self-FK because children still
+    reference the deleted id.
+    """
+    if tx.parent_transaction_id is not None:
+        return
+
+    children = (
+        db.query(Transaction)
+        .filter_by(user_id=user_id, parent_transaction_id=tx.id)
+        .order_by(Transaction.date.asc(), Transaction.created_at.asc(), Transaction.id.asc())
+        .all()
+    )
+    if not children:
+        return
+
+    new_root = children[0]
+    new_root.parent_transaction_id = None
+    for child in children[1:]:
+        child.parent_transaction_id = new_root.id
+
 @router.get("")
 def list_transactions(
     billing_month: Optional[str] = Query(None),  # YYYY-MM — used by dashboard/summary
@@ -181,6 +205,7 @@ def delete_transaction(
             Transaction.date >= tx.date,
         ).filter_by(user_id=current_user.id).all()
     else:
+        _promote_transaction_series_root_if_needed(db, current_user.id, tx)
         to_delete = [tx]
 
     for t in to_delete:

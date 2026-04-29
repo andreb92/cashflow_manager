@@ -54,6 +54,31 @@ def test_delete_single(client):
     assert client.delete(f"/api/v1/transactions/{tx_id}", params={"cascade": "single"}).status_code == 200
     assert client.get(f"/api/v1/transactions/{tx_id}").status_code == 404
 
+
+def test_delete_single_recurring_root_promotes_next_row(client):
+    pm_id, cat_id = _setup(client)
+    root_id = client.post("/api/v1/transactions", json={
+        "date": "2026-01-10", "detail": "Subscription", "amount": 12,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit", "recurrence_months": 3,
+    }).json()["id"]
+
+    r = client.delete(f"/api/v1/transactions/{root_id}", params={"cascade": "single"})
+    assert r.status_code == 200
+    assert client.get(f"/api/v1/transactions/{root_id}").status_code == 404
+
+    remaining = sorted(
+        client.get("/api/v1/transactions", params={"limit": 100}).json(),
+        key=lambda t: t["date"],
+    )
+    series = [t for t in remaining if t["detail"] == "Subscription"]
+    assert len(series) == 2
+    promoted_root = series[0]
+    assert promoted_root["parent_transaction_id"] is None
+    for row in series[1:]:
+        assert row["parent_transaction_id"] == promoted_root["id"]
+
+
 def test_delete_future_recurring(client):
     pm_id, cat_id = _setup(client)
     client.post("/api/v1/transactions", json={
