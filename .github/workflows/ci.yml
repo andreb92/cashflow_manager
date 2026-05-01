@@ -30,7 +30,7 @@ jobs:
 
       - name: Restore pip cache
         id: backend-pip-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ steps.pip-cache-dir.outputs.dir }}
           key: pip-${{ runner.os }}-py3.14.0-${{ hashFiles('backend/requirements.txt') }}
@@ -45,7 +45,7 @@ jobs:
 
       - name: Save pip cache (default branch only)
         if: github.ref == 'refs/heads/main' && steps.backend-pip-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ steps.pip-cache-dir.outputs.dir }}
           key: ${{ steps.backend-pip-cache.outputs.cache-primary-key }}
@@ -81,7 +81,7 @@ jobs:
 
       - name: Restore npm cache
         id: frontend-npm-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: npm-${{ runner.os }}-node24.11.1-${{ hashFiles('frontend/package-lock.json') }}
@@ -94,7 +94,7 @@ jobs:
 
       - name: Save npm cache (default branch only)
         if: github.ref == 'refs/heads/main' && steps.frontend-npm-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ steps.frontend-npm-cache.outputs.cache-primary-key }}
