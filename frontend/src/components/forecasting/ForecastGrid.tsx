@@ -12,7 +12,8 @@ export default function ForecastGrid({ projection, onAddAdjustment }: Props) {
   const months = projection.monthly_totals.map((m) => m.month);
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto max-h-[70vh]">
       <table className="text-sm border-collapse min-w-full">
         <thead>
           <tr>
@@ -82,6 +83,8 @@ export default function ForecastGrid({ projection, onAddAdjustment }: Props) {
           </tr>
         </tfoot>
       </table>
+      </div>
+      <p className="text-xs text-faint mt-1 sm:hidden">← Swipe to scroll all months</p>
     </div>
   );
 }

@@ -55,6 +55,8 @@ def list_transfers(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if billing_month is None and from_account is None and to_account is None and limit is None:
+        raise HTTPException(400, "At least one of billing_month, from_account, to_account, or limit is required")
     q = db.query(Transfer).filter_by(user_id=current_user.id)
     if billing_month:
         q = q.filter(Transfer.billing_month.startswith(billing_month))

@@ -20,6 +20,9 @@ def category_spending(
     from_date = from_ym[:7] + "-01"
     to_date = to_ym[:7] + "-01"
 
+    if from_date > to_date:
+        return []
+
     q = (
         db.query(
             Transaction.category_id,
@@ -69,6 +72,9 @@ def transfer_spending(user_id: str, from_ym: str, to_ym: str, db: Session) -> li
     """Aggregate transfers to saving/investment/pension accounts by month."""
     from_date = from_ym[:7] + "-01"
     to_date = to_ym[:7] + "-01"
+
+    if from_date > to_date:
+        return []
 
     rows = (
         db.query(

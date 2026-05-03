@@ -78,7 +78,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
       : { transaction_direction: 'debit', date: format(new Date(), 'yyyy-MM-dd') },
   });
 
-  const { data: methods = [] } = useQuery({ queryKey: ['payment-methods'], queryFn: () => paymentMethodsApi.list() });
+  const { data: methods = [] } = useQuery({ queryKey: ['payment-methods', 'active'], queryFn: () => paymentMethodsApi.list() });
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list() });
 
   const selectedMethodId = watch('payment_method_id');
@@ -238,7 +238,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
             ))}
           </select>
         )}
-        {errors.category_id && <p className="text-xs text-red-600">Sub-category is required</p>}
+        {errors.category_id && <p className="text-xs text-red-600">Category is required</p>}
         <p className="text-xs text-faint">The spending category for budgeting and analytics.</p>
       </div>
 

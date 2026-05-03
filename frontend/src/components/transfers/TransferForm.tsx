@@ -39,8 +39,8 @@ export default function TransferForm({ onSuccess, initial }: Props) {
 
   const currentYear = new Date().getFullYear();
   const { data: paymentMethods = [] } = useQuery({
-    queryKey: ['payment-methods'],
-    queryFn: () => paymentMethodsApi.list(true),
+    queryKey: ['payment-methods', 'active'],
+    queryFn: () => paymentMethodsApi.list(),
   });
   const { data: assets = [] } = useQuery({
     queryKey: ['assets', currentYear],

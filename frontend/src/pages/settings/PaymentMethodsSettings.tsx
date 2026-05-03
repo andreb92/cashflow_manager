@@ -39,26 +39,26 @@ export default function PaymentMethodsSettings() {
   const [editHasStampDuty, setEditHasStampDuty] = useState(false);
 
   const { data: methods = [], isLoading } = useQuery({
-    queryKey: ['payment-methods-all'],
+    queryKey: ['payment-methods', 'all'],
     queryFn: () => paymentMethodsApi.list(false),
   });
 
   const { mutate: deactivate } = useMutation({
     mutationFn: (id: string) => paymentMethodsApi.update(id, { is_active: false }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payment-methods-all'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payment-methods', 'all'] }),
   });
 
   const { mutate: reactivate } = useMutation({
     mutationFn: (id: string) => paymentMethodsApi.update(id, { is_active: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payment-methods-all'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payment-methods', 'all'] }),
   });
 
   const { mutate: editMutate, isPending: editing } = useMutation({
     mutationFn: ({ id, name, linked_bank_id, has_stamp_duty }: { id: string; name: string; linked_bank_id: string | null; has_stamp_duty?: boolean }) =>
       paymentMethodsApi.update(id, { name, linked_bank_id: linked_bank_id || null, has_stamp_duty }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payment-methods-all'] });
-      qc.invalidateQueries({ queryKey: ['payment-methods'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'all'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'active'] });
       setEditMethod(null);
     },
   });
@@ -67,8 +67,8 @@ export default function PaymentMethodsSettings() {
     mutationFn: ({ id, balance }: { id: string; balance: number }) =>
       paymentMethodsApi.setMainBank(id, balance),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payment-methods-all'] });
-      qc.invalidateQueries({ queryKey: ['payment-methods'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'all'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'active'] });
       setSwitchBankId(null);
       setNewBalance('');
     },
@@ -93,8 +93,8 @@ export default function PaymentMethodsSettings() {
   const { mutate: createMethod, isPending: creating, error: createMutationError, reset: resetCreateMutation } = useMutation({
     mutationFn: (body: Omit<PaymentMethod, 'id' | 'user_id'>) => paymentMethodsApi.create(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payment-methods-all'] });
-      qc.invalidateQueries({ queryKey: ['payment-methods'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'all'] });
+      qc.invalidateQueries({ queryKey: ['payment-methods', 'active'] });
       setAddOpen(false);
       reset();
     },

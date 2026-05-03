@@ -181,7 +181,7 @@ def test_pm_rename_cascades_to_transfers(client):
     assert r.status_code == 200
 
     # The transfer's from_account_name must now be "NewBank"
-    transfers = client.get("/api/v1/transfers").json()
+    transfers = client.get("/api/v1/transfers", params={"limit": 100}).json()
     assert any(t["from_account_name"] == "NewBank" for t in transfers), \
         "Transfer not updated after PM rename"
     assert not any(t["from_account_name"] == "MyBank" for t in transfers), \

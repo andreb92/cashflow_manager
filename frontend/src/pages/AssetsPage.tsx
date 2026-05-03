@@ -94,7 +94,7 @@ export default function AssetsPage() {
       {isLoading ? (
         <div className="animate-pulse h-48 bg-muted-bg rounded" />
       ) : (
-        <div className="bg-surface rounded-lg border border-line overflow-hidden">
+        <div className="bg-surface rounded-lg border border-line overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-subtle text-left text-primary">

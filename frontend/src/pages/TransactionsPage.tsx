@@ -39,41 +39,43 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-3xl space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-xl font-bold text-primary flex-1">Transactions</h1>
-        <select
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-          className="border border-line rounded px-2 py-1 text-sm bg-surface text-primary"
-        >
-          {YEAR_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <select
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="border border-line rounded px-2 py-1 text-sm bg-surface text-primary"
-        >
-          {MONTH_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <div className="flex rounded border border-line overflow-hidden text-sm">
-          <button
-            className={`px-3 py-1 ${mode === 'date' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
-            onClick={() => setMode('date')}
-            title="Filter by the actual date the transaction occurred"
+      <div className="space-y-2">
+        <h1 className="text-xl font-bold text-primary">Transactions</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="border border-line rounded px-2 py-1 text-sm bg-surface text-primary"
           >
-            By date
-          </button>
-          <button
-            className={`px-3 py-1 ${mode === 'billing' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
-            onClick={() => setMode('billing')}
-            title="Filter by billing month — credit card charges appear in the month they are billed"
+            {YEAR_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <select
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="border border-line rounded px-2 py-1 text-sm bg-surface text-primary"
           >
-            By billing month
-          </button>
+            {MONTH_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <div className="flex rounded border border-line overflow-hidden text-sm">
+            <button
+              className={`px-3 py-1 ${mode === 'date' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
+              onClick={() => setMode('date')}
+              title="Filter by the actual date the transaction occurred"
+            >
+              By date
+            </button>
+            <button
+              className={`px-3 py-1 ${mode === 'billing' ? 'bg-blue-600 text-white' : 'bg-surface text-secondary hover:bg-subtle'}`}
+              onClick={() => setMode('billing')}
+              title="Filter by billing month — credit card charges appear in the month they are billed"
+            >
+              By billing month
+            </button>
+          </div>
         </div>
       </div>
       <TransactionList

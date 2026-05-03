@@ -8,6 +8,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 export default function SummaryPage() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [inputYear, setInputYear] = useState(() => String(new Date().getFullYear()));
+  const [mobileMonth, setMobileMonth] = useState(() => new Date().getMonth());
   const navigate = useNavigate();
 
   const { data: months = [], isLoading } = useQuery({
@@ -47,6 +48,7 @@ export default function SummaryPage() {
             const parsed = parseInt(e.target.value, 10);
             if (!isNaN(parsed) && parsed >= 2000 && parsed <= 2100) {
               setYear(parsed);
+              setMobileMonth(0);
             }
           }}
           className="border border-line-strong rounded px-2 py-1 w-24 text-sm bg-elevated text-primary"
@@ -55,10 +57,50 @@ export default function SummaryPage() {
         />
       </div>
 
-      {isLoading ? (
+      {isLoading && (
         <div className="animate-pulse h-48 bg-muted-bg rounded" />
-      ) : (
-        <div className="overflow-x-auto">
+      )}
+
+      {/* Mobile view — one month at a time */}
+      {!isLoading && (
+        <div className="block sm:hidden space-y-3">
+          {/* Month navigator */}
+          <div className="flex items-center justify-between bg-surface border border-line rounded-lg px-4 py-2">
+            <button
+              onClick={() => setMobileMonth((m) => Math.max(0, m - 1))}
+              disabled={mobileMonth === 0}
+              className="px-2 py-1 text-secondary disabled:opacity-30 hover:text-primary"
+            >
+              ‹
+            </button>
+            <span className="font-medium text-primary">{MONTHS[mobileMonth]} {year}</span>
+            <button
+              onClick={() => setMobileMonth((m) => Math.min(11, m + 1))}
+              disabled={mobileMonth === 11}
+              className="px-2 py-1 text-secondary disabled:opacity-30 hover:text-primary"
+            >
+              ›
+            </button>
+          </div>
+          {/* Month data */}
+          <div className="bg-surface border border-line rounded-lg divide-y divide-line">
+            {rows.map((row) => (
+              <div
+                key={row.label}
+                className={`flex justify-between items-center px-4 py-2.5 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${row.highlight ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''}`}
+                onClick={() => months[mobileMonth] && navigate(`/transactions?billing_month=${year}-${String(mobileMonth + 1).padStart(2, '0')}-01`)}
+              >
+                <span className="text-secondary">{row.label}</span>
+                <span className="tabular-nums text-primary">{row.values[mobileMonth] ?? '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop view — full table */}
+      {!isLoading && (
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr>

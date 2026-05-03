@@ -5,7 +5,10 @@ import {
 } from 'recharts';
 import type { AnalyticsCategoryRow, Category } from '../../types/api';
 
-const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'];
+const COLORS = [
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316',
+  '#0ea5e9','#d946ef','#14b8a6','#f43f5e','#a78bfa','#fb923c','#4ade80','#e11d48',
+];
 
 interface Props {
   data: AnalyticsCategoryRow[];

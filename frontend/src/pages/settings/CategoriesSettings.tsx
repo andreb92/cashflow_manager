@@ -16,7 +16,7 @@ export default function CategoriesSettings() {
   const [editCat, setEditCat] = useState<Category | null>(null);
 
   const { data: categories = [], isLoading } = useQuery({
-    queryKey: ['categories-all'],
+    queryKey: ['categories', 'all'],
     queryFn: () => categoriesApi.list(true),
   });
 
@@ -26,7 +26,7 @@ export default function CategoriesSettings() {
   const { mutate: create, isPending: creating } = useMutation({
     mutationFn: (d: AddFields) => categoriesApi.create(d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories-all'] });
+      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
       qc.invalidateQueries({ queryKey: ['categories'] });
       setAddOpen(false);
       resetAdd();
@@ -36,7 +36,7 @@ export default function CategoriesSettings() {
   const { mutate: update, isPending: updating } = useMutation({
     mutationFn: (d: EditFields) => categoriesApi.update(editCat!.id, d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories-all'] });
+      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
       qc.invalidateQueries({ queryKey: ['categories'] });
       setEditCat(null);
     },
@@ -45,7 +45,7 @@ export default function CategoriesSettings() {
   const { mutate: deactivate } = useMutation({
     mutationFn: (id: string) => categoriesApi.update(id, { is_active: false }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories-all'] });
+      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
       qc.invalidateQueries({ queryKey: ['categories'] });
     },
   });

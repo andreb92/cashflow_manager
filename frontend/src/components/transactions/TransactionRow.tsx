@@ -14,7 +14,7 @@ interface Props {
 export default function TransactionRow({ tx, method, category, onEdit, onDelete }: Props) {
   const directionColor = tx.transaction_direction === 'income' ? 'green' : tx.transaction_direction === 'credit' ? 'blue' : 'red';
   return (
-    <li className="flex items-center gap-3 py-2 border-b last:border-0 text-sm">
+    <li className="flex items-center gap-2 py-2 border-b last:border-0 text-sm">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate text-primary">{tx.detail}</span>
@@ -39,9 +39,15 @@ export default function TransactionRow({ tx, method, category, onEdit, onDelete 
       <Badge color={directionColor}>
         {tx.transaction_direction === 'income' ? '+' : '-'}€{fmt(tx.amount)}
       </Badge>
-      <div className="flex gap-1">
-        <Button variant="ghost" className="text-xs px-2" onClick={onEdit}>Edit</Button>
-        <Button variant="ghost" className="text-xs px-2 text-red-500" onClick={onDelete}>Delete</Button>
+      <div className="flex gap-1 shrink-0">
+        <Button variant="ghost" className="text-xs px-1.5 min-w-[2rem]" onClick={onEdit} title="Edit">
+          <span className="hidden sm:inline">Edit</span>
+          <span className="sm:hidden" aria-hidden="true">✎</span>
+        </Button>
+        <Button variant="ghost" className="text-xs px-1.5 min-w-[2rem] text-red-500" onClick={onDelete} title="Delete">
+          <span className="hidden sm:inline">Delete</span>
+          <span className="sm:hidden" aria-hidden="true">✕</span>
+        </Button>
       </div>
     </li>
   );

@@ -37,7 +37,7 @@ def test_create_recurring_transfer(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     })
-    transfers = client.get("/api/v1/transfers").json()
+    transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     assert len([t for t in transfers if t["from_account_name"] == "MyBank"]) == 3
 
 def test_delete_single_transfer(client):
@@ -64,7 +64,7 @@ def test_delete_single_recurring_root_promotes_next_row(client):
     assert r.status_code == 200
     assert client.get(f"/api/v1/transfers/{root_id}").status_code == 404
 
-    remaining = sorted(client.get("/api/v1/transfers").json(), key=lambda t: t["date"])
+    remaining = sorted(client.get("/api/v1/transfers", params={"limit": 1000}).json(), key=lambda t: t["date"])
     assert len(remaining) == 2
     promoted_root = remaining[0]
     assert promoted_root["parent_transfer_id"] is None
@@ -129,7 +129,7 @@ def test_update_transfer_cascade_single(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     }).json()["id"]
-    all_transfers = client.get("/api/v1/transfers").json()
+    all_transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     second = next(t for t in all_transfers if t["id"] != first_id and t["parent_transfer_id"] == first_id and t["date"].startswith("2026-02"))
     # Update only the second occurrence
     r = client.put(f"/api/v1/transfers/{second['id']}", json={"amount": 999.0}, params={"cascade": "single"})
@@ -150,12 +150,12 @@ def test_update_transfer_cascade_all(client):
         "recurrence_months": 3,
     }).json()["id"]
     second_id = next(
-        t["id"] for t in client.get("/api/v1/transfers").json()
+        t["id"] for t in client.get("/api/v1/transfers", params={"limit": 1000}).json()
         if t["id"] != first_id and t["parent_transfer_id"] == first_id
     )
     r = client.put(f"/api/v1/transfers/{second_id}", json={"amount": 777.0}, params={"cascade": "all"})
     assert r.status_code == 200
-    all_amounts = [t["amount"] for t in client.get("/api/v1/transfers").json()]
+    all_amounts = [t["amount"] for t in client.get("/api/v1/transfers", params={"limit": 1000}).json()]
     assert all(a == 777.0 for a in all_amounts)
 
 
@@ -167,7 +167,7 @@ def test_update_transfer_cascade_future(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     }).json()["id"]
-    all_transfers = client.get("/api/v1/transfers").json()
+    all_transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     second = next(t for t in all_transfers if t["id"] != first_id and t["parent_transfer_id"] == first_id and t["date"].startswith("2026-02"))
     r = client.put(f"/api/v1/transfers/{second['id']}", json={"amount": 555.0}, params={"cascade": "future"})
     assert r.status_code == 200
@@ -189,7 +189,7 @@ def test_delete_transfer_cascade_all(client):
     }).json()["id"]
     r = client.delete(f"/api/v1/transfers/{first_id}", params={"cascade": "all"})
     assert r.status_code == 200
-    remaining = client.get("/api/v1/transfers").json()
+    remaining = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     assert len(remaining) == 0
 
 
@@ -204,7 +204,7 @@ def test_update_transfer_date_does_not_cascade_to_siblings(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     }).json()["id"]
-    all_transfers = client.get("/api/v1/transfers").json()
+    all_transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
 
     # Identify the three rows by their month
     def row_for_month(prefix):
@@ -243,14 +243,14 @@ def test_cascade_all_recomputes_billing_month_per_row(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     }).json()["id"]
-    all_transfers = client.get("/api/v1/transfers").json()
+    all_transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     any_id = all_transfers[0]["id"]
 
     # Update amount on all rows — this must not corrupt billing_month
     r = client.put(f"/api/v1/transfers/{any_id}", json={"amount": 150.0}, params={"cascade": "all"})
     assert r.status_code == 200
 
-    refreshed = client.get("/api/v1/transfers").json()
+    refreshed = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     for t in refreshed:
         expected_bm = t["date"][:7] + "-01"
         assert t["billing_month"] == expected_bm, (
@@ -266,12 +266,12 @@ def test_delete_transfer_cascade_future(client):
         "to_account_type": "saving", "to_account_name": "MySavings",
         "recurrence_months": 3,
     }).json()["id"]
-    all_transfers = client.get("/api/v1/transfers").json()
+    all_transfers = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     second = next(t for t in all_transfers if t["id"] != first_id and t["parent_transfer_id"] == first_id and t["date"].startswith("2026-02"))
     r = client.delete(f"/api/v1/transfers/{second['id']}", params={"cascade": "future"})
     assert r.status_code == 200
     # Only the first occurrence should remain
-    remaining = client.get("/api/v1/transfers").json()
+    remaining = client.get("/api/v1/transfers", params={"limit": 1000}).json()
     assert len(remaining) == 1
     assert remaining[0]["id"] == first_id
 

@@ -8,7 +8,7 @@ export default function App() {
   const queryClient = useMemo(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+        defaultOptions: { queries: { staleTime: 60 * 1000, retry: 1 } },
       }),
     []
   );
