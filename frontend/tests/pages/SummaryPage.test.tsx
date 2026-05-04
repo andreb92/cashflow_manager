@@ -61,15 +61,15 @@ test('SummaryPage shows stamp_duty in monthly row', async () => {
     )
   );
   render(<SummaryPage />, { wrapper });
-  // The Stamp duty row label is rendered
-  await waitFor(() => expect(screen.getByText('Stamp duty')).toBeInTheDocument());
+  // The Stamp duty row label is rendered (appears in both mobile and desktop views)
+  await waitFor(() => expect(screen.getAllByText('Stamp duty')[0]).toBeInTheDocument());
   // The value "2,00" appears in the stamp duty row (Italian format: 2 → "2,00")
   expect(screen.getByText('2,00')).toBeInTheDocument();
 });
 
 test('SummaryPage shows Transfers in row', async () => {
   render(<SummaryPage />, { wrapper });
-  await waitFor(() => expect(screen.getByText('Transfers in')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getAllByText('Transfers in')[0]).toBeInTheDocument());
 });
 
 test('SummaryPage year input debounce prevents invalid queries', async () => {
