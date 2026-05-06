@@ -52,7 +52,7 @@ models/      ← SQLAlchemy ORM models
 |---|---|
 | `User` | Account; `oidc_sub`, `email`, `password_hash` |
 | `PaymentMethod` | Bank account, credit card, debit card, prepaid, cash. Has `has_stamp_duty: bool` (default false): when true on a `credit_card`, the summary service adds €2.00/month when monthly spend exceeds €77.47 (Italian imposta di bollo) |
-| `Transaction` | Income or expense; supports installments and recurrence |
+| `Transaction` | Income or expense; supports recurrence |
 | `Transfer` | Money movement between two payment methods |
 | `Asset` | Named asset with monthly value snapshots |
 | `Category` | User-defined income/expense categories |
@@ -93,7 +93,6 @@ User-supplied foreign references that point at user-owned rows are validated at 
 | `forecasting` | Project future balance from recurring transactions |
 | `bank_balance` | Compute running bank balance from transaction history |
 | `billing` | Resolve billing month for credit card transactions |
-| `installments` | Expand installment transactions into N monthly rows |
 | `recurrence` | Generate recurrence instances for a date range |
 | `salary` | Gross-to-net calculation (IRPEF + INPS) |
 | `tax` | Seed and cache Italian tax brackets |
@@ -193,4 +192,4 @@ ghcr.io/your-username/cashflow-manager:latest
 - `billing_month` on a transaction is always the first day of a month (`YYYY-MM-01`)
 - `tracking_start_date` in user settings is always the first day of a month
 - Credit card transactions are billed in the month following the transaction month (configurable per payment method)
-- Recurring and installment transaction instances are linked via `parent_transaction_id` FK back to the originating transaction; `PUT` and `DELETE` on `/transactions/{id}` accept a `cascade` query param: `single` (only this instance), `future` (this + future instances), `all` (entire series)
+- Recurring transaction instances are linked via `parent_transaction_id` FK back to the originating transaction; `PUT` and `DELETE` on `/transactions/{id}` accept a `cascade` query param: `single` (only this instance), `future` (this + future instances), `all` (entire series)

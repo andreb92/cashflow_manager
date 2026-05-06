@@ -21,9 +21,6 @@ export default function TransactionRow({ tx, method, category, onEdit, onDelete 
           {tx.recurrence_months && (
             <span title="Recurring" className="text-blue-400 text-xs">↻</span>
           )}
-          {tx.installment_total && tx.installment_index && (
-            <Badge color="yellow">{tx.installment_index}/{tx.installment_total}</Badge>
-          )}
         </div>
         <div className="text-muted text-xs mt-0.5">
           {tx.date}

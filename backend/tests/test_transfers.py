@@ -141,6 +141,25 @@ def test_update_transfer_cascade_single(client):
     assert first["amount"] == 200.0
 
 
+def test_update_transfer_can_clear_notes(client):
+    _setup(client)
+    transfer_id = client.post("/api/v1/transfers", json={
+        "date": "2026-01-01",
+        "amount": 200,
+        "detail": "With note",
+        "from_account_type": "bank",
+        "from_account_name": "MyBank",
+        "to_account_type": "saving",
+        "to_account_name": "MySavings",
+        "notes": "remove me",
+    }).json()["id"]
+
+    r = client.put(f"/api/v1/transfers/{transfer_id}", json={"notes": None})
+    assert r.status_code == 200
+    assert r.json()["notes"] is None
+    assert client.get(f"/api/v1/transfers/{transfer_id}").json()["notes"] is None
+
+
 def test_update_transfer_cascade_all(client):
     _setup(client)
     first_id = client.post("/api/v1/transfers", json={
@@ -194,7 +213,7 @@ def test_delete_transfer_cascade_all(client):
 
 
 def test_update_transfer_date_does_not_cascade_to_siblings(client):
-    """CRIT-1 + CRIT-2: updating a date on one installment must not change sibling dates,
+    """CRIT-1 + CRIT-2: updating a date on one recurring row must not change sibling dates,
     and billing_month must be recomputed correctly for every row from its own date."""
     _setup(client)
     # Create a 3-month recurring transfer starting 2026-01-10

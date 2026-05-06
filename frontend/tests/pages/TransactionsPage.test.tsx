@@ -23,14 +23,14 @@ const mockTransactions = [
     id: 'tx1', user_id: 'u1', date: '2026-03-15', detail: 'Grocery run',
     amount: 45.50, payment_method_id: 'pm1', category_id: 'cat1',
     transaction_direction: 'debit', billing_month: '2026-03-01',
-    recurrence_months: null, installment_total: null, installment_index: null,
+    recurrence_months: null,
     parent_transaction_id: null, notes: null, created_at: '', updated_at: '',
   },
   {
     id: 'tx2', user_id: 'u1', date: '2026-03-01', detail: 'Salary',
     amount: 2800, payment_method_id: 'pm2', category_id: 'cat2',
     transaction_direction: 'income', billing_month: '2026-03-01',
-    recurrence_months: 12, installment_total: null, installment_index: null,
+    recurrence_months: 12,
     parent_transaction_id: null, notes: null, created_at: '', updated_at: '',
   },
 ];
@@ -146,7 +146,7 @@ test('TransactionRow shows billing annotation when billing_month differs from da
         id: 'tx-cc', user_id: 'u1', date: '2026-01-15', detail: 'CC Dinner',
         amount: 80, payment_method_id: 'pm1', category_id: null,
         transaction_direction: 'debit', billing_month: '2026-02-01',
-        recurrence_months: null, installment_total: null, installment_index: null,
+        recurrence_months: null,
         parent_transaction_id: null, notes: null, created_at: '', updated_at: '',
       }])
     )
@@ -205,4 +205,31 @@ test('Transaction edit form only exposes backend-supported fields', async () => 
   expect(requestBody).not.toHaveProperty('payment_method_id');
   expect(requestBody).not.toHaveProperty('transaction_direction');
   expect(requestBody).not.toHaveProperty('recurrence_months');
+});
+
+test('Transaction edit form sends null when notes are cleared', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown;
+  const txWithNote = { ...mockTransactions[0], notes: 'old note' };
+
+  server.use(
+    http.get('/api/v1/transactions', () => HttpResponse.json([txWithNote])),
+    http.put('/api/v1/transactions/tx1', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({ ...txWithNote, notes: null });
+    })
+  );
+
+  render(<TransactionsPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Grocery run')).toBeInTheDocument());
+
+  const row = screen.getByText('Grocery run').closest('li')!;
+  await user.click(within(row).getByRole('button', { name: /edit/i }));
+
+  const notesInput = screen.getByLabelText(/notes/i);
+  await user.clear(notesInput);
+  await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).toMatchObject({ notes: null });
 });

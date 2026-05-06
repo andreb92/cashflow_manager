@@ -2,8 +2,9 @@ import os
 import base64
 import httpx
 from typing import Optional
+import jwt as pyjwt
+from jwt import PyJWKClient
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from app.config import get_settings
 
 
 def _key_bytes(hex_key: str) -> bytes:
@@ -75,3 +76,15 @@ async def get_userinfo(userinfo_endpoint: str, access_token: str) -> dict:
         )
     resp.raise_for_status()
     return resp.json()
+
+
+def verify_id_token(id_token: str, jwks_uri: str, client_id: str, issuer: str) -> dict:
+    jwks_client = PyJWKClient(jwks_uri)
+    signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+    return pyjwt.decode(
+        id_token,
+        signing_key.key,
+        algorithms=["RS256", "ES256"],
+        audience=client_id,
+        issuer=issuer,
+    )

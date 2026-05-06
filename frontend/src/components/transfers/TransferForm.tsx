@@ -82,7 +82,7 @@ export default function TransferForm({ onSuccess, initial }: Props) {
           date: d.date,
           detail: d.detail,
           amount: parseFloat(d.amount),
-          ...(d.notes ? { notes: d.notes } : {}),
+          notes: d.notes || null,
         });
       }
       return transfersApi.create({

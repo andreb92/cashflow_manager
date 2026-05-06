@@ -4,7 +4,7 @@
 [![Docker](https://img.shields.io/github/v/release/soulwaxx/cashflow_manager?label=ghcr.io&logo=docker)](https://github.com/soulwaxx/cashflow_manager/pkgs/container/cashflow-manager)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A self-hosted personal cash flow manager. Track transactions, transfers, recurring expenses, installment plans, salary, assets, and monthly forecasts — all in a single Docker container.
+A self-hosted personal cash flow manager. Track transactions, transfers, recurring expenses, salary, assets, and monthly forecasts — all in a single Docker container.
 
 Multi-user with per-user data isolation. Supports both local (username/password) and OIDC authentication.
 
@@ -13,7 +13,6 @@ Multi-user with per-user data isolation. Supports both local (username/password)
 ## Features
 
 - **Transaction tracking** — income and expenses with categories, payment methods, and tags
-- **Installment plans** — split a purchase across N months automatically
 - **Recurring transactions** — weekly, monthly, yearly with configurable end dates
 - **Transfers** — move money between your own accounts
 - **Asset tracking** — track value of savings, investments, and property

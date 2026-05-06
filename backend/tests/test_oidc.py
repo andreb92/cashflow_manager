@@ -124,6 +124,37 @@ def test_decrypt_cookie_returns_none_on_bad_input():
     assert decrypt_cookie("not-valid-ciphertext!!", "a" * 64) is None
 
 
+def test_verify_id_token_uses_jwks_audience_and_issuer_validation():
+    """ID token verification must validate with provider JWKS, client audience, and issuer."""
+    from app.services.oidc import verify_id_token
+
+    signing_key = MagicMock()
+    signing_key.key = "public-key"
+    jwks_client = MagicMock()
+    jwks_client.get_signing_key_from_jwt.return_value = signing_key
+    claims = {"sub": "subject-1", "email": "user@example.com"}
+
+    with patch("app.services.oidc.PyJWKClient", return_value=jwks_client) as jwks, \
+         patch("app.services.oidc.pyjwt.decode", return_value=claims) as decode:
+        result = verify_id_token(
+            "id-token",
+            "https://example.com/jwks",
+            "client-id",
+            "https://example.com/",
+        )
+
+    jwks.assert_called_once_with("https://example.com/jwks")
+    jwks_client.get_signing_key_from_jwt.assert_called_once_with("id-token")
+    decode.assert_called_once_with(
+        "id-token",
+        "public-key",
+        algorithms=["RS256", "ES256"],
+        audience="client-id",
+        issuer="https://example.com/",
+    )
+    assert result == claims
+
+
 def test_oidc_callback_state_mismatch_returns_400(oidc_client):
     """callback with no oidc_state cookie must reject with 400."""
     resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=wrongstate")
@@ -138,25 +169,70 @@ def test_oidc_callback_creates_new_user(oidc_client):
         "token_endpoint": "https://example.com/token",
         "userinfo_endpoint": "https://example.com/userinfo",
         "end_session_endpoint": "https://example.com/logout",
+        "jwks_uri": "https://example.com/jwks",
+        "issuer": "https://example.com/",
     }
     tokens = {"access_token": "at-123", "id_token": "it-abc"}
     userinfo = {"sub": "sub-new-user", "email": "oidcnew@example.com", "name": "New User", "email_verified": True}
+    id_token_claims = {"nonce": "test-nonce", "sub": "sub-new-user"}
 
     oidc_client.cookies.set("oidc_state", "test-state-value")
     oidc_client.cookies.set("oidc_nonce", "test-nonce")
     with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
          patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
          patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
-         patch("app.routers.auth._pyjwt.decode", return_value={"nonce": "test-nonce"}):
+         patch("app.services.oidc.verify_id_token", return_value=id_token_claims) as verify:
         resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=test-state-value")
     oidc_client.cookies.delete("oidc_state")
     oidc_client.cookies.delete("oidc_nonce")
 
     assert resp.status_code in (200, 302, 307)
+    verify.assert_called_once_with(
+        "it-abc",
+        "https://example.com/jwks",
+        "client-id",
+        "https://example.com/",
+    )
     assert oidc_client.cookies.get("access_token")
     assert oidc_client.cookies.get("oidc_id_token")
     assert oidc_client.cookies.get("oidc_state") is None
     assert oidc_client.cookies.get("oidc_nonce") is None
+
+
+def test_oidc_callback_rejects_id_token_subject_mismatch(oidc_client):
+    """UserInfo subject must match the verified ID token subject."""
+    from unittest.mock import patch, AsyncMock
+
+    discovery = {
+        "authorization_endpoint": "https://example.com/auth",
+        "token_endpoint": "https://example.com/token",
+        "userinfo_endpoint": "https://example.com/userinfo",
+        "jwks_uri": "https://example.com/jwks",
+        "issuer": "https://example.com/",
+    }
+    tokens = {"access_token": "at-sub", "id_token": "it-sub"}
+    userinfo = {
+        "sub": "userinfo-sub",
+        "email": "subject@example.com",
+        "name": "Subject",
+        "email_verified": True,
+    }
+
+    oidc_client.cookies.set("oidc_state", "subject-state")
+    oidc_client.cookies.set("oidc_nonce", "nonce")
+    with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
+         patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
+         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
+         patch(
+             "app.services.oidc.verify_id_token",
+             return_value={"sub": "id-token-sub", "nonce": "nonce"},
+         ):
+        resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=subject-state")
+    oidc_client.cookies.delete("oidc_state")
+    oidc_client.cookies.delete("oidc_nonce")
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "OIDC subject mismatch"
 
 
 def test_oidc_callback_does_not_link_to_existing_email_user(oidc_client):
@@ -249,6 +325,8 @@ def test_oidc_callback_invalid_nonce_rejected(oidc_client):
         "authorization_endpoint": "https://example.com/auth",
         "token_endpoint": "https://example.com/token",
         "userinfo_endpoint": "https://example.com/userinfo",
+        "jwks_uri": "https://example.com/jwks",
+        "issuer": "https://example.com/",
     }
     tokens = {"access_token": "at-nonce", "id_token": "it-nonce"}
     userinfo = {"sub": "sub-nonce", "email": "nonce@example.com", "name": "Nonce", "email_verified": True}
@@ -258,7 +336,10 @@ def test_oidc_callback_invalid_nonce_rejected(oidc_client):
     with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
          patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
          patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
-         patch("app.routers.auth._pyjwt.decode", return_value={"nonce": "wrong-nonce"}):
+         patch(
+             "app.services.oidc.verify_id_token",
+             return_value={"sub": "sub-nonce", "nonce": "wrong-nonce"},
+         ):
         resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=nonce-state")
     oidc_client.cookies.delete("oidc_state")
     oidc_client.cookies.delete("oidc_nonce")

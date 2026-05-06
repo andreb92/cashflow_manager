@@ -138,7 +138,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
             detail: data.detail,
             amount: parseFloat(data.amount),
             category_id: data.category_id || undefined,
-            ...(data.notes ? { notes: data.notes } : {}),
+            notes: data.notes || null,
           },
           initial.recurrence_months ? editCascade : undefined,
         );

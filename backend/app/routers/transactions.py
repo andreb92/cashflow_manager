@@ -9,7 +9,6 @@ from app.models.category import Category
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.billing import billing_month
 from app.services.recurrence import expand_recurrence
-from decimal import Decimal
 from dateutil.parser import parse as parse_date
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -143,7 +142,11 @@ def update_transaction(
     tx = db.query(Transaction).filter_by(id=tx_id, user_id=current_user.id).first()
     if not tx:
         raise HTTPException(404, "Not found")
-    if "category_id" in req.model_dump(exclude_none=True):
+    payload = req.model_dump(exclude_unset=True)
+    for field in ("date", "detail", "amount"):
+        if field in payload and payload[field] is None:
+            raise HTTPException(422, f"{field} cannot be null")
+    if "category_id" in payload:
         _ensure_category_owned_by_user(db, req.category_id, current_user.id)
 
     root_id = tx.parent_transaction_id or tx.id
@@ -167,8 +170,8 @@ def update_transaction(
     }
 
     # Split fields: date must only apply to the target transaction, not siblings
-    cascade_fields = {k: v for k, v in req.model_dump(exclude_none=True).items() if k != "date"}
-    target_fields = req.model_dump(exclude_none=True)
+    cascade_fields = {k: v for k, v in payload.items() if k != "date"}
+    target_fields = payload
 
     for t in siblings:
         fields = target_fields if t.id == tx_id else cascade_fields

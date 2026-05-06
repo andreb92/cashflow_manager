@@ -17,8 +17,7 @@ interface CreateBody {
   category_id: string;
   transaction_direction: Transaction['transaction_direction'];
   recurrence_months?: number;
-  installment_total?: number;
-  notes?: string;
+  notes?: string | null;
 }
 
 export const transactionsApi = {

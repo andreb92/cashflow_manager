@@ -132,6 +132,10 @@ def update_transfer(
     t = db.query(Transfer).filter_by(id=transfer_id, user_id=current_user.id).first()
     if not t:
         raise HTTPException(404, "Not found")
+    payload = req.model_dump(exclude_unset=True)
+    for field in ("date", "detail", "amount"):
+        if field in payload and payload[field] is None:
+            raise HTTPException(422, f"{field} cannot be null")
     root_id = t.parent_transfer_id or t.id
     if cascade == "all":
         rows = db.query(Transfer).filter(
@@ -145,8 +149,8 @@ def update_transfer(
     else:
         rows = [t]
     # Split fields: date must only apply to the target row, not siblings
-    cascade_fields = {k: v for k, v in req.model_dump(exclude_none=True).items() if k != "date"}
-    target_fields = req.model_dump(exclude_none=True)
+    cascade_fields = {k: v for k, v in payload.items() if k != "date"}
+    target_fields = payload
 
     for row in rows:
         fields = target_fields if row.id == transfer_id else cascade_fields

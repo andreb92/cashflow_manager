@@ -32,7 +32,7 @@ class TransactionUpdate(BaseModel):
     # NOTE: payment_method_id is intentionally omitted from this schema.
     # Changing the payment method would require recomputing billing_month (which is
     # derived from the payment method's billing cycle) and cascading updates to any
-    # related installment or recurring child transactions. Allowing it here would
+    # related recurring child transactions. Allowing it here would
     # silently leave billing_month stale and break financial reporting. Users must
     # delete and recreate the transaction to change its payment method.
     date: Optional[str] = None
@@ -43,5 +43,7 @@ class TransactionUpdate(BaseModel):
 
     @field_validator("date")
     @classmethod
-    def validate_date(cls, v: str) -> str:
+    def validate_date(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
         return _validate_iso_date(v)

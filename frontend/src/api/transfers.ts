@@ -10,7 +10,7 @@ interface CreateBody {
   to_account_type: Transfer['to_account_type'];
   to_account_name: string;
   recurrence_months?: number;
-  notes?: string;
+  notes?: string | null;
 }
 
 interface ListParams {

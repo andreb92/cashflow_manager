@@ -315,6 +315,24 @@ def test_update_adjustment(client):
     assert r.json()["valid_from"] == "2027-09-01"
 
 
+def test_update_adjustment_accepts_partial_body(client):
+    _setup(client)
+    fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 2}).json()["id"]
+    line_id = next(l["id"] for l in client.get(f"/api/v1/forecasts/{fc_id}").json()["lines"] if l["detail"] == "Car loan")
+    adj_id = client.post(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments", json={
+        "valid_from": "2027-06-01", "new_amount": 400.0, "adjustment_type": "fixed",
+    }).json()["id"]
+
+    r = client.put(f"/api/v1/forecasts/{fc_id}/lines/{line_id}/adjustments/{adj_id}", json={
+        "new_amount": 575.0,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["new_amount"] == 575.0
+    assert body["valid_from"] == "2027-06-01"
+    assert body["adjustment_type"] == "fixed"
+
+
 def test_update_adjustment_not_found(client):
     _setup(client)
     fc_id = client.post("/api/v1/forecasts", json={"name": "Plan", "base_year": 2026, "projection_years": 2}).json()["id"]

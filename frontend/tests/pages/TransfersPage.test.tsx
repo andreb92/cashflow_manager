@@ -158,6 +158,33 @@ test('Transfer edit updates amount value', async () => {
   });
 });
 
+test('Transfer edit form sends null when notes are cleared', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown = null;
+  const transferWithNote = { ...mockTransfers[0], notes: 'old note' };
+
+  server.use(
+    http.get('/api/v1/transfers', () => HttpResponse.json([transferWithNote])),
+    http.put('/api/v1/transfers/tr1', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({ ...transferWithNote, notes: null });
+    })
+  );
+
+  render(<TransfersPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText('Savings deposit')).toBeInTheDocument());
+
+  const transferRow = screen.getByText('Savings deposit').closest('li')!;
+  await user.click(within(transferRow).getByRole('button', { name: /edit/i }));
+
+  const notesInput = screen.getByLabelText(/notes/i);
+  await user.clear(notesInput);
+  await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).toMatchObject({ notes: null });
+});
+
 test('TransfersPage loads additional transfer pages on demand', async () => {
   const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => ({
     id: `tr-${i}`,

@@ -159,6 +159,59 @@ def test_resubmit_onboarding_deletes_transactions_and_transfers(client, db):
     assert db.query(Transfer).filter_by(user_id=user.id).count() == 0
 
 
+def test_resubmit_onboarding_deletes_assets_forecasts_and_user_tax_config(client, db):
+    """Re-submitting onboarding is a full per-user financial reset."""
+    from app.models.asset import Asset
+    from app.models.forecast import Forecast, ForecastLine, ForecastAdjustment
+    from app.models.tax import TaxConfig
+    from app.models.user import User
+
+    client.post("/api/v1/auth/register", json={
+        "email": "fullreset@example.com", "password": "Password1!", "name": "Full Reset"
+    })
+    assert client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD).status_code == 200
+
+    user = db.query(User).filter_by(email="fullreset@example.com").first()
+    assert user is not None
+
+    db.add(Asset(
+        user_id=user.id,
+        year=2026,
+        asset_type="saving",
+        asset_name="Manual",
+        manual_override=123.0,
+    ))
+    forecast = Forecast(user_id=user.id, name="Old plan", base_year=2026, projection_years=1)
+    db.add(forecast)
+    db.flush()
+    line = ForecastLine(forecast_id=forecast.id, user_id=user.id, detail="Old line", base_amount=10.0)
+    db.add(line)
+    db.flush()
+    db.add(ForecastAdjustment(
+        forecast_line_id=line.id,
+        user_id=user.id,
+        valid_from="2027-01-01",
+        new_amount=20.0,
+    ))
+    db.add(TaxConfig(user_id=user.id, valid_from="2027-01-01", inps_rate=0.05))
+    db.commit()
+
+    assert db.query(Asset).filter_by(user_id=user.id).count() == 1
+    assert db.query(Forecast).filter_by(user_id=user.id).count() == 1
+    assert db.query(ForecastLine).filter_by(user_id=user.id).count() == 1
+    assert db.query(ForecastAdjustment).filter_by(user_id=user.id).count() == 1
+    assert db.query(TaxConfig).filter_by(user_id=user.id).count() == 1
+
+    assert client.post("/api/v1/onboarding", json=WIZARD_PAYLOAD).status_code == 200
+    db.expire_all()
+
+    assert db.query(Asset).filter_by(user_id=user.id).count() == 0
+    assert db.query(Forecast).filter_by(user_id=user.id).count() == 0
+    assert db.query(ForecastLine).filter_by(user_id=user.id).count() == 0
+    assert db.query(ForecastAdjustment).filter_by(user_id=user.id).count() == 0
+    assert db.query(TaxConfig).filter_by(user_id=user.id).count() == 0
+
+
 def test_onboarding_salary_months_stored(client):
     client.post("/api/v1/auth/register", json={
         "email": "bob@example.com", "password": "Password1!", "name": "Bob"

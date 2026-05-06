@@ -191,7 +191,6 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 import secrets as _secrets
-import jwt as _pyjwt
 from app.services import oidc as _oidc
 
 OIDC_STATE_COOKIE = "oidc_state"
@@ -262,32 +261,29 @@ async def oidc_callback(
         settings.oidc_client_secret,
     )
     userinfo_ep = endpoints.get("userinfo_endpoint")
+    id_token = tokens.get("id_token")
+    id_token_claims = None
+    if id_token:
+        try:
+            id_token_claims = _oidc.verify_id_token(
+                id_token,
+                endpoints["jwks_uri"],
+                settings.oidc_client_id,
+                endpoints["issuer"],
+            )
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid ID token")
+        if oidc_nonce is not None and id_token_claims.get("nonce") != oidc_nonce:
+            raise HTTPException(status_code=400, detail="Invalid nonce")
+
     if userinfo_ep:
         info = await _oidc.get_userinfo(userinfo_ep, tokens["access_token"])
-        # Verify nonce from ID token if present (without signature verification —
-        # the userinfo call already authenticated the session via the access token)
-        id_token = tokens.get("id_token")
-        if id_token and oidc_nonce is not None:
-            try:
-                id_token_claims = _pyjwt.decode(id_token, options={"verify_signature": False})
-            except Exception:
-                id_token_claims = {}
-            if id_token_claims.get("nonce") != oidc_nonce:
-                raise HTTPException(status_code=400, detail="Invalid nonce")
+        if id_token_claims and info.get("sub") and id_token_claims.get("sub") != info.get("sub"):
+            raise HTTPException(status_code=400, detail="OIDC subject mismatch")
     else:
-        from jwt import PyJWKClient
-        id_token = tokens.get("id_token", "")
-        jwks_client = PyJWKClient(endpoints["jwks_uri"])
-        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
-        info = _pyjwt.decode(
-            id_token,
-            signing_key.key,
-            algorithms=["RS256", "ES256"],
-            audience=settings.oidc_client_id,
-        )
-        # Verify nonce for the no-userinfo path
-        if oidc_nonce is not None and info.get("nonce") != oidc_nonce:
-            raise HTTPException(status_code=400, detail="Invalid nonce")
+        if id_token_claims is None:
+            raise HTTPException(status_code=400, detail="OIDC provider did not return an ID token")
+        info = id_token_claims
 
     sub = info.get("sub") or info.get("oid")
     if not sub:

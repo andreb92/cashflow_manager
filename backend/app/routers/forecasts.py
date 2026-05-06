@@ -6,7 +6,7 @@ from app.models.category import Category
 from app.models.payment_method import PaymentMethod
 from app.models.forecast import Forecast, ForecastLine, ForecastAdjustment
 from app.services.forecasting import auto_generate_lines, project_forecast
-from app.schemas.forecast import ForecastCreate, ForecastUpdate, ForecastLineCreate, AdjustmentCreate
+from app.schemas.forecast import ForecastCreate, ForecastUpdate, ForecastLineCreate, AdjustmentCreate, AdjustmentUpdate
 
 router = APIRouter(prefix="/forecasts", tags=["forecasts"])
 
@@ -218,7 +218,7 @@ def add_adjustment(
 
 @router.put("/{fc_id}/lines/{line_id}/adjustments/{adj_id}")
 def update_adjustment(
-    fc_id: str, line_id: str, adj_id: str, req: AdjustmentCreate,
+    fc_id: str, line_id: str, adj_id: str, req: AdjustmentUpdate,
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     # Verify ownership chain: adj → line → forecast (prevents IDOR across user's own forecasts)
@@ -238,14 +238,20 @@ def update_adjustment(
     )
     if not adj:
         raise HTTPException(404, "Not found")
-    # Validate valid_from is within projection period (same check as add_adjustment)
-    end_date = f"{fc.base_year + fc.projection_years:04d}-12-01"
-    start_date = f"{fc.base_year + 1:04d}-01-01"
-    if not (start_date <= req.valid_from <= end_date):
-        raise HTTPException(422, f"valid_from must be between {start_date} and {end_date}")
-    adj.valid_from = req.valid_from
-    adj.new_amount = req.new_amount
-    adj.adjustment_type = req.adjustment_type
+    payload = req.model_dump(exclude_unset=True)
+    null_fields = [field for field, value in payload.items() if value is None]
+    if null_fields:
+        raise HTTPException(422, f"Fields cannot be null: {', '.join(sorted(null_fields))}")
+
+    if "valid_from" in payload:
+        # Validate valid_from is within projection period (same check as add_adjustment)
+        end_date = f"{fc.base_year + fc.projection_years:04d}-12-01"
+        start_date = f"{fc.base_year + 1:04d}-01-01"
+        if not (start_date <= payload["valid_from"] <= end_date):
+            raise HTTPException(422, f"valid_from must be between {start_date} and {end_date}")
+
+    for field, value in payload.items():
+        setattr(adj, field, value)
     db.commit()
     db.refresh(adj)
     return adj

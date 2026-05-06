@@ -201,6 +201,20 @@ def test_update_transaction_rejects_foreign_category_id(client):
     assert r.status_code == 422
 
 
+def test_update_transaction_can_clear_notes(client):
+    pm_id, cat_id = _setup(client)
+    tx_id = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Owned tx", "amount": 50,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit", "notes": "remove me",
+    }).json()["id"]
+
+    r = client.put(f"/api/v1/transactions/{tx_id}", json={"notes": None})
+    assert r.status_code == 200
+    assert r.json()["notes"] is None
+    assert client.get(f"/api/v1/transactions/{tx_id}").json()["notes"] is None
+
+
 # --- GET single transaction 404 ---
 
 def test_get_transaction_not_found(client):

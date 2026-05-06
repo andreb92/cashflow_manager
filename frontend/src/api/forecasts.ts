@@ -31,7 +31,7 @@ export const forecastsApi = {
 
   addAdjustment: (id: string, lineId: string, body: { valid_from: string; new_amount: number; adjustment_type?: 'fixed' | 'percentage' }) =>
     apiClient.post<ForecastAdjustment>(`/forecasts/${id}/lines/${lineId}/adjustments`, body).then((r) => r.data),
-  updateAdjustment: (id: string, lineId: string, adjId: string, body: { valid_from?: string; new_amount?: number }) =>
+  updateAdjustment: (id: string, lineId: string, adjId: string, body: { valid_from?: string; new_amount?: number; adjustment_type?: 'fixed' | 'percentage' }) =>
     apiClient.put<ForecastAdjustment>(`/forecasts/${id}/lines/${lineId}/adjustments/${adjId}`, body).then((r) => r.data),
   deleteAdjustment: (id: string, lineId: string, adjId: string) =>
     apiClient.delete(`/forecasts/${id}/lines/${lineId}/adjustments/${adjId}`),

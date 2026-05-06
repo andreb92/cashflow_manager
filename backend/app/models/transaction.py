@@ -24,8 +24,6 @@ class Transaction(Base):
     transaction_direction: Mapped[str] = mapped_column(String(20))
     billing_month: Mapped[str] = mapped_column(String(10))
     recurrence_months: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    installment_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    installment_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     parent_transaction_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("transactions.id"), nullable=True
     )

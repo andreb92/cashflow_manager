@@ -27,3 +27,9 @@ class AdjustmentCreate(BaseModel):
     valid_from: str    # YYYY-MM-DD
     new_amount: float
     adjustment_type: Literal["fixed", "percentage"] = "fixed"
+
+
+class AdjustmentUpdate(BaseModel):
+    valid_from: Optional[str] = None
+    new_amount: Optional[float] = None
+    adjustment_type: Optional[Literal["fixed", "percentage"]] = None

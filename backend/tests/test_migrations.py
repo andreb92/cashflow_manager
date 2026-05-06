@@ -53,6 +53,9 @@ def test_migration_head_creates_expected_schema():
         assert "updated_at" in forecast_cols
 
         # transactions — category_id FK must have exactly one reference to categories with RESTRICT
+        tx_cols = {c["name"] for c in inspector.get_columns("transactions")}
+        assert "installment_total" not in tx_cols
+        assert "installment_index" not in tx_cols
         tx_fks = inspector.get_foreign_keys("transactions")
         cat_fks = [fk for fk in tx_fks if fk["referred_table"] == "categories"]
         assert len(cat_fks) == 1, f"Expected 1 FK to categories, got {len(cat_fks)}: {cat_fks}"

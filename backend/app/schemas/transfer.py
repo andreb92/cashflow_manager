@@ -39,5 +39,7 @@ class TransferUpdate(BaseModel):
 
     @field_validator("date")
     @classmethod
-    def validate_date(cls, v: str) -> str:
+    def validate_date(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
         return _validate_iso_date(v)

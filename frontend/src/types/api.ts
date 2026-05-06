@@ -46,8 +46,6 @@ export interface Transaction {
   transaction_direction: 'debit' | 'income' | 'credit';
   billing_month: string;
   recurrence_months: number | null;
-  installment_total: number | null;
-  installment_index: number | null;
   parent_transaction_id: string | null;
   notes: string | null;
   created_at: string;
