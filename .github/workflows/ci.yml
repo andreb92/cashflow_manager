@@ -3,7 +3,15 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'deploy/**'
+      - '**/*.md'
+      - 'CHANGELOG.md'
   pull_request:
+    paths-ignore:
+      - 'deploy/**'
+      - '**/*.md'
+      - 'CHANGELOG.md'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -28,27 +36,19 @@ jobs:
         id: pip-cache-dir
         run: echo "dir=$(python -m pip cache dir)" >> "$GITHUB_OUTPUT"
 
-      - name: Restore pip cache
-        id: backend-pip-cache
-        uses: actions/cache/restore@v5
+      - name: Pip cache
+        uses: actions/cache@v5
         with:
           path: ${{ steps.pip-cache-dir.outputs.dir }}
-          key: pip-${{ runner.os }}-py3.14.0-${{ hashFiles('backend/requirements.txt') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('backend/requirements.txt') }}
           restore-keys: |
-            pip-${{ runner.os }}-py3.14.0-
+            pip-${{ runner.os }}-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --requirement requirements.txt
         working-directory: backend
-
-      - name: Save pip cache (default branch only)
-        if: github.ref == 'refs/heads/main' && steps.backend-pip-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.pip-cache-dir.outputs.dir }}
-          key: ${{ steps.backend-pip-cache.outputs.cache-primary-key }}
 
       - name: Run tests with coverage
         run: pytest --cov --cov-report=xml --cov-report=term-missing
@@ -79,25 +79,21 @@ jobs:
         run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
         working-directory: frontend
 
-      - name: Restore npm cache
-        id: frontend-npm-cache
-        uses: actions/cache/restore@v5
+      - name: Npm cache
+        uses: actions/cache@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: npm-${{ runner.os }}-node24.11.1-${{ hashFiles('frontend/package-lock.json') }}
+          key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
           restore-keys: |
-            npm-${{ runner.os }}-node24.11.1-
+            npm-${{ runner.os }}-
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
         working-directory: frontend
 
-      - name: Save npm cache (default branch only)
-        if: github.ref == 'refs/heads/main' && steps.frontend-npm-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ steps.frontend-npm-cache.outputs.cache-primary-key }}
+      - name: Typecheck and build
+        run: npm run build
+        working-directory: frontend
 
       - name: Run tests with coverage
         run: npm test -- --coverage
@@ -110,3 +106,46 @@ jobs:
           name: frontend-coverage
           path: frontend/coverage
           retention-days: 3
+
+  image-build:
+    name: Build production image (no push)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: cashflow-manager:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test image starts
+        run: |
+          docker run --rm -d --name cashflow-ci \
+            -e DEVELOPMENT_MODE=true \
+            -e DB_PATH=/app/data/cashflow.db \
+            -p 8080:8080 \
+            cashflow-manager:ci
+          # Wait up to 30s for nginx to answer
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/ > /dev/null 2>&1; then
+              echo "Image responded after ${i}s"
+              docker stop cashflow-ci
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Image did not become ready within 30s"
+          docker logs cashflow-ci || true
+          docker stop cashflow-ci || true
+          exit 1

@@ -1,4 +1,4 @@
-name: Cleanup untagged packages
+name: Cleanup container images
 
 on:
   schedule:
@@ -6,16 +6,67 @@ on:
   workflow_dispatch:
 
 jobs:
-  cleanup:
+  cleanup-untagged:
     name: Delete untagged GHCR images
     runs-on: ubuntu-latest
     permissions:
       packages: write
     steps:
       - uses: actions/delete-package-versions@v5
-        continue-on-error: true
         with:
           package-name: cashflow-manager
           package-type: container
           delete-only-untagged-versions: true
           min-versions-to-keep: 2
+
+  cleanup-old-sha-tags:
+    name: Delete old SHA-tagged GHCR images
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      PACKAGE: cashflow-manager
+      KEEP_N: "10"
+      MAX_AGE_DAYS: "30"
+    steps:
+      - name: Identify and delete stale SHA-tagged versions
+        run: |
+          set -euo pipefail
+          # Pull every container version (paginated). Each item has id, created_at, metadata.container.tags.
+          gh api --paginate \
+            "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
+            > versions.json
+
+          # Filter: versions whose tags are non-empty AND every tag matches sha-*
+          # (i.e. SHA-only versions — anything also tagged "latest" or a semver is left alone).
+          # Sort by created_at desc, drop the KEEP_N newest, then drop anything younger than MAX_AGE_DAYS.
+          python3 - <<'PY' > to_delete.txt
+          import json, os, datetime as dt
+          keep_n = int(os.environ["KEEP_N"])
+          max_age = int(os.environ["MAX_AGE_DAYS"])
+          cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=max_age)
+          with open("versions.json") as f:
+              versions = json.load(f)
+          sha_only = []
+          for v in versions:
+              tags = v.get("metadata", {}).get("container", {}).get("tags", [])
+              if not tags:
+                  continue
+              if all(t.startswith("sha-") for t in tags):
+                  sha_only.append(v)
+          sha_only.sort(key=lambda v: v["created_at"], reverse=True)
+          for v in sha_only[keep_n:]:
+              created = dt.datetime.fromisoformat(v["created_at"].replace("Z", "+00:00"))
+              if created < cutoff:
+                  print(v["id"])
+          PY
+
+          count=$(wc -l < to_delete.txt | tr -d ' ')
+          echo "Will delete ${count} SHA-tagged versions"
+          while read -r vid; do
+            [ -z "$vid" ] && continue
+            echo "Deleting version ${vid}"
+            gh api -X DELETE "/users/${OWNER}/packages/container/${PACKAGE}/versions/${vid}"
+          done < to_delete.txt

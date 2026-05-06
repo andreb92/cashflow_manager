@@ -33,6 +33,7 @@ COPY start.sh /app/start.sh
 # All paths follow FHS: pid files in /run, nginx state in /var/lib/nginx.
 RUN chmod +x /app/start.sh \
     && mkdir -p \
+    /app/data \
     /run \
     /var/lib/nginx/client_temp \
     /var/lib/nginx/proxy_temp \
@@ -41,6 +42,12 @@ RUN chmod +x /app/start.sh \
     /var/lib/nginx/scgi_temp \
     /var/lib/nginx/logs \
     /var/log/nginx \
-    && chmod -R 777 /run /var/lib/nginx /var/log/nginx
+    && chmod -R 777 /app/data /run /var/lib/nginx /var/log/nginx
+
+# Default to a non-root UID for defense-in-depth.
+# deploy/docker-compose.yml overrides this with `user: ${APP_UID}:${APP_GID}`,
+# but anyone running `docker run` directly should not land as root.
+USER 1000:1000
+
 EXPOSE 8080
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
