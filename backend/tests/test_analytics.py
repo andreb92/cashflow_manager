@@ -211,9 +211,11 @@ def test_analytics_does_not_resolve_another_users_category_metadata(client, db):
     """Even if corrupt data points at another user's category id, analytics must not leak its labels."""
     from app.models.user import User, gen_uuid
     from app.models.category import Category
+    from app.models.payment_method import PaymentMethod
     from app.models.transaction import Transaction
 
     pm_id, _ = _setup(client)
+    alice_user_id = db.get(PaymentMethod, pm_id).user_id
     bob = User(id=gen_uuid(), email="bob-analytics@example.com", name="Bob")
     db.add(bob)
     db.flush()
@@ -222,7 +224,7 @@ def test_analytics_does_not_resolve_another_users_category_metadata(client, db):
     db.flush()
     foreign_cat_id = foreign_cat.id
     db.add(Transaction(
-        user_id=next(pm["user_id"] for pm in client.get("/api/v1/payment-methods").json() if pm["id"] == pm_id),
+        user_id=alice_user_id,
         date="2026-01-10",
         detail="Corrupt row",
         amount=123,

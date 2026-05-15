@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi } from '../../api/auth';
+import { AUTH_ME_QUERY_KEY } from '../../hooks/useCurrentUser';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 
@@ -17,8 +18,8 @@ export default function RegisterForm() {
   const onSubmit = async (data: Fields) => {
     setError(null);
     try {
-      await authApi.register(data.email, data.name, data.password);
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      const user = await authApi.register(data.email, data.name, data.password);
+      queryClient.setQueryData(AUTH_ME_QUERY_KEY, user);
       navigate('/');
     } catch {
       setError('Registration failed. Email may already be in use.');

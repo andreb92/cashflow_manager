@@ -31,6 +31,7 @@ export default function TransferForm({ onSuccess, initial }: Props) {
   const qc = useQueryClient();
   const isEditing = !!initial;
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [editCascade, setEditCascade] = useState<'single' | 'future' | 'all'>('single');
   const { register, handleSubmit, watch, setValue } = useForm<Fields>({
     defaultValues: initial
       ? { ...initial, amount: String(initial.amount), recurrence_months: String(initial.recurrence_months ?? ''), notes: initial.notes ?? '' }
@@ -83,7 +84,7 @@ export default function TransferForm({ onSuccess, initial }: Props) {
           detail: d.detail,
           amount: parseFloat(d.amount),
           notes: d.notes || null,
-        });
+        }, initial.recurrence_months ? editCascade : undefined);
       }
       return transfersApi.create({
         date: d.date, detail: d.detail, amount: parseFloat(d.amount),
@@ -147,6 +148,19 @@ export default function TransferForm({ onSuccess, initial }: Props) {
         </p>
       )}
       <Input label="Notes" type="text" {...register('notes')} />
+      {initial?.recurrence_months && (
+        <Select
+          label="Apply changes to"
+          hint="Choose how this edit affects recurring occurrences."
+          options={[
+            { value: 'single', label: 'Only this occurrence' },
+            { value: 'future', label: 'This and future occurrences' },
+            { value: 'all', label: 'All occurrences' },
+          ]}
+          value={editCascade}
+          onChange={(e) => setEditCascade(e.target.value as 'single' | 'future' | 'all')}
+        />
+      )}
       {submitError && (
         <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">{submitError}</p>
       )}

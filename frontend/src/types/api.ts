@@ -41,7 +41,7 @@ export interface Transaction {
   date: string;
   detail: string;
   amount: number;
-  payment_method_id: string;
+  payment_method_id: string | null;
   category_id: string | null;
   transaction_direction: 'debit' | 'income' | 'credit';
   billing_month: string;

@@ -11,9 +11,22 @@ from app.models.transfer import Transfer
 router = APIRouter(prefix="/payment-methods", tags=["payment-methods"])
 
 
-def _validate_linked_bank_id(db: Session, linked_bank_id: str | None, user_id: str) -> None:
-    if linked_bank_id and not db.query(PaymentMethod).filter_by(id=linked_bank_id, user_id=user_id).first():
+def _validate_linked_bank_id(
+    db: Session,
+    linked_bank_id: str | None,
+    user_id: str,
+    *,
+    current_pm_id: str | None = None,
+) -> None:
+    if linked_bank_id is None:
+        return
+    if linked_bank_id == current_pm_id:
+        raise HTTPException(422, "linked_bank_id cannot point to the same payment method")
+    linked_bank = db.query(PaymentMethod).filter_by(id=linked_bank_id, user_id=user_id).first()
+    if not linked_bank:
         raise HTTPException(422, "linked_bank_id not found or belongs to another user")
+    if linked_bank.type != "bank":
+        raise HTTPException(422, "linked_bank_id must point to a bank account")
 
 @router.get("")
 def list_methods(
@@ -55,21 +68,25 @@ def update_method(pm_id: str, req: PaymentMethodUpdate, current_user: User = Dep
     if not pm:
         raise HTTPException(404, "Not found")
     old_name = pm.name
-    if "linked_bank_id" in req.model_dump(exclude_none=True):
-        _validate_linked_bank_id(db, req.linked_bank_id, current_user.id)
-    for field, val in req.model_dump(exclude_none=True).items():
+    payload = req.model_dump(exclude_unset=True)
+    for field in ("name", "is_active", "has_stamp_duty"):
+        if field in payload and payload[field] is None:
+            raise HTTPException(422, f"{field} cannot be null")
+    if "linked_bank_id" in payload:
+        _validate_linked_bank_id(db, payload["linked_bank_id"], current_user.id, current_pm_id=pm_id)
+    for field, val in payload.items():
         setattr(pm, field, val)
     # Cascade name change to all transfers referencing this account name
-    if req.name and req.name != old_name:
+    if payload.get("name") and payload["name"] != old_name:
         (
             db.query(Transfer)
             .filter_by(user_id=current_user.id, from_account_name=old_name)
-            .update({"from_account_name": req.name})
+            .update({"from_account_name": payload["name"]})
         )
         (
             db.query(Transfer)
             .filter_by(user_id=current_user.id, to_account_name=old_name)
-            .update({"to_account_name": req.name})
+            .update({"to_account_name": payload["name"]})
         )
     try:
         db.commit()
@@ -95,9 +112,15 @@ def set_main_bank(pm_id: str, req: SetMainBankRequest, current_user: User = Depe
         old_main.is_main_bank = False
     new_main.is_main_bank = True
     today_first = datetime.now(timezone.utc).date().replace(day=1)
-    db.add(MainBankHistory(
-        user_id=current_user.id, payment_method_id=pm_id,
-        valid_from=today_first.isoformat(), opening_balance=req.opening_balance,
-    ))
+    valid_from = today_first.isoformat()
+    history = db.query(MainBankHistory).filter_by(user_id=current_user.id, valid_from=valid_from).first()
+    if history:
+        history.payment_method_id = pm_id
+        history.opening_balance = req.opening_balance
+    else:
+        db.add(MainBankHistory(
+            user_id=current_user.id, payment_method_id=pm_id,
+            valid_from=valid_from, opening_balance=req.opening_balance,
+        ))
     db.commit()
     return {"ok": True}

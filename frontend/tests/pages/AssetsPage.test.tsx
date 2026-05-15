@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -57,4 +58,27 @@ test('AssetsPage lists assets with computed and override amounts', async () => {
 test('AssetsPage shows year selector', async () => {
   render(<AssetsPage />, { wrapper });
   await waitFor(() => expect(screen.getByRole('spinbutton')).toBeInTheDocument());
+});
+
+test('AssetsPage add account stores dynamic opening balance setting', async () => {
+  let requestBody: unknown;
+  server.use(
+    http.put('/api/v1/user-settings', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({ ok: true });
+    })
+  );
+  const user = userEvent.setup();
+  render(<AssetsPage />, { wrapper });
+
+  await user.click(await screen.findByRole('button', { name: /add account/i }));
+  await user.type(screen.getByLabelText(/account name/i), 'Emergency');
+  await user.type(screen.getByLabelText(/opening balance/i), '1234');
+  await user.click(screen.getByRole('button', { name: /^add$/i }));
+
+  await waitFor(() => {
+    expect(requestBody).toEqual([
+      { key: 'opening_saving_balance_Emergency', value: '1234' },
+    ]);
+  });
 });

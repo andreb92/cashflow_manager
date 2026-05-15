@@ -118,11 +118,19 @@ def _accumulate_balances(
                 for t in transfers_by_month.get(month_first, []):
                     from_match = (
                         (t.from_payment_method_id is not None and t.from_payment_method_id == pm.id)
-                        or (t.from_payment_method_id is None and t.from_account_name == pm.name)
+                        or (
+                            t.from_payment_method_id is None
+                            and t.from_account_type == "bank"
+                            and t.from_account_name == pm.name
+                        )
                     )
                     to_match = (
                         (t.to_payment_method_id is not None and t.to_payment_method_id == pm.id)
-                        or (t.to_payment_method_id is None and t.to_account_name == pm.name)
+                        or (
+                            t.to_payment_method_id is None
+                            and t.to_account_type == "bank"
+                            and t.to_account_name == pm.name
+                        )
                     )
                     if from_match:
                         balance -= float(t.amount)

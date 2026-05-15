@@ -43,7 +43,10 @@ TAX_2026 = {
 
 
 def seed_tax_config(db: Session) -> None:
-    existing = db.query(TaxConfig).filter_by(valid_from=TAX_2026["valid_from"]).first()
+    existing = db.query(TaxConfig).filter(
+        TaxConfig.valid_from == TAX_2026["valid_from"],
+        TaxConfig.user_id.is_(None),
+    ).first()
     if not existing:
         db.add(TaxConfig(id=gen_uuid(), **TAX_2026))
         db.commit()

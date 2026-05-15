@@ -27,6 +27,23 @@ def test_update_user_setting_invalid_key_returns_422(client):
     r = client.put("/api/v1/user-settings", json=[{"key": "injected_key", "value": "x"}])
     assert r.status_code == 422
 
+def test_update_asset_opening_balance_settings(client):
+    """Saving/investment account opening balances are dynamic but intentionally allowed."""
+    _setup(client)
+    r = client.put("/api/v1/user-settings", json=[
+        {"key": "opening_saving_balance_Emergency", "value": "1000"},
+        {"key": "opening_investment_balance_Broker", "value": "2500"},
+    ])
+    assert r.status_code == 200
+    settings = {item["key"]: item["value"] for item in client.get("/api/v1/user-settings").json()}
+    assert settings["opening_saving_balance_Emergency"] == "1000"
+    assert settings["opening_investment_balance_Broker"] == "2500"
+
+def test_update_empty_asset_opening_balance_suffix_returns_422(client):
+    _setup(client)
+    r = client.put("/api/v1/user-settings", json=[{"key": "opening_saving_balance_", "value": "0"}])
+    assert r.status_code == 422
+
 def test_users_me_returns_profile(client):
     client.post("/api/v1/auth/register", json={
         "email": "alice@example.com", "password": "Password1!", "name": "Alice"

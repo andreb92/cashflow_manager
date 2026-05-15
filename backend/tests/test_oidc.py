@@ -347,6 +347,33 @@ def test_oidc_callback_invalid_nonce_rejected(oidc_client):
     assert resp.status_code == 400
 
 
+def test_oidc_callback_missing_nonce_cookie_with_id_token_rejected(oidc_client):
+    """If an ID token is returned, the nonce cookie must be present and match."""
+    from unittest.mock import patch, AsyncMock
+
+    discovery = {
+        "authorization_endpoint": "https://example.com/auth",
+        "token_endpoint": "https://example.com/token",
+        "userinfo_endpoint": "https://example.com/userinfo",
+        "jwks_uri": "https://example.com/jwks",
+        "issuer": "https://example.com/",
+    }
+    tokens = {"access_token": "at-nonce", "id_token": "it-nonce"}
+    userinfo = {"sub": "sub-nonce", "email": "nonce@example.com", "name": "Nonce", "email_verified": True}
+
+    oidc_client.cookies.set("oidc_state", "nonce-state")
+    oidc_client.cookies.delete("oidc_nonce")
+    with patch("app.services.oidc.discover_endpoints", AsyncMock(return_value=discovery)), \
+         patch("app.services.oidc.exchange_code", AsyncMock(return_value=tokens)), \
+         patch("app.services.oidc.get_userinfo", AsyncMock(return_value=userinfo)), \
+         patch("app.services.oidc.verify_id_token", return_value={"sub": "sub-nonce", "nonce": "nonce"}):
+        resp = oidc_client.get("/api/v1/auth/oidc/callback?code=abc&state=nonce-state")
+    oidc_client.cookies.delete("oidc_state")
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid nonce"
+
+
 def test_oidc_logout_corrupted_cookie_redirects_to_login(oidc_client):
     """oidc_logout with an undecryptable cookie must redirect to /login."""
     from unittest.mock import patch, AsyncMock

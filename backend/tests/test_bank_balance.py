@@ -258,7 +258,7 @@ def test_compute_bank_balance_missing_pm_is_skipped(_standalone_db, make_user):
     with a valid_from < month_first also skip since PM is still missing."""
     from app.services.bank_balance import compute_bank_balance
     from app.models.payment_method import PaymentMethod, MainBankHistory
-    from app.models.user import UserSetting
+    from app.models.user import UserSetting, gen_uuid
 
     user = make_user(email="missingpm@test.com")
     db = _standalone_db
@@ -271,12 +271,27 @@ def test_compute_bank_balance_missing_pm_is_skipped(_standalone_db, make_user):
         user_id=user.id, payment_method_id=real_pm.id,
         valid_from="2026-01-01", opening_balance=500,
     ))
-    # A second MBH entry pointing to a PM that doesn't exist
-    db.add(MainBankHistory(
-        user_id=user.id, payment_method_id="nonexistent-pm-id",
-        valid_from="2026-02-01", opening_balance=999,
-    ))
     db.commit()
+
+    # A second MBH entry pointing to a PM that doesn't exist. This is intentionally
+    # corrupt legacy data, so insert it with FK checks disabled for this connection.
+    raw_conn = db.get_bind().raw_connection()
+    try:
+        cursor = raw_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute(
+            """
+            INSERT INTO main_bank_history (id, user_id, payment_method_id, valid_from, opening_balance)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (gen_uuid(), user.id, "nonexistent-pm-id", "2026-02-01", 999),
+        )
+        raw_conn.commit()
+        cursor.execute("PRAGMA foreign_keys = ON")
+        raw_conn.commit()
+    finally:
+        raw_conn.close()
+    db.expire_all()
 
     # February: opening_balance resets to 999 (MBH valid_from == month_first), then PM lookup
     # fails so no transactions apply — balance is 999
@@ -505,6 +520,39 @@ def test_bank_balance_transfer_fallback_to_name_when_no_id(_standalone_db, make_
     assert result == pytest.approx(750.0), (
         f"Legacy transfer should match by name when FK is NULL; got {result}"
     )
+
+
+def test_bank_balance_transfer_name_fallback_requires_bank_type(_standalone_db, make_user):
+    """Legacy fallback must not treat same-named saving/investment accounts as the main bank."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="xfer_type_fallback@test.com")
+    db = _standalone_db
+
+    pm = PaymentMethod(user_id=user.id, name="SharedName", type="bank", is_main_bank=True)
+    db.add(pm)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(Transfer(
+        user_id=user.id, date="2026-01-15", amount=250,
+        from_account_type="saving", from_account_name="SharedName",
+        to_account_type="investment", to_account_name="Broker",
+        billing_month="2026-01-01", detail="",
+        from_payment_method_id=None,
+        to_payment_method_id=None,
+    ))
+    db.commit()
+
+    result = compute_bank_balance(user.id, 2026, 1, db)
+    assert result == pytest.approx(1000.0)
 
 
 def test_compute_bank_balances_for_year_cc_debit_reduces_bank_in_billing_month(_standalone_db, make_user):

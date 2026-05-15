@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import RegisterForm from '../../src/components/auth/RegisterForm';
+import { AUTH_ME_QUERY_KEY } from '../../src/hooks/useCurrentUser';
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -13,6 +14,16 @@ function wrapper({ children }: { children: React.ReactNode }) {
       <MemoryRouter>{children}</MemoryRouter>
     </QueryClientProvider>
   );
+}
+
+function renderWithClient(node: React.ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{node}</MemoryRouter>
+    </QueryClientProvider>
+  );
+  return qc;
 }
 
 test('RegisterForm renders name, email, and password fields', () => {
@@ -46,6 +57,22 @@ test('RegisterForm submitting with valid data calls the register API', async () 
       password: 'SecurePass1!',
     });
   });
+});
+
+test('RegisterForm primes the auth user cache after successful registration', async () => {
+  const registeredUser = { id: 'user-1', email: 'new@example.com', name: 'New User', has_password: true, has_oidc: false };
+  server.use(
+    http.post('/api/v1/auth/register', () => HttpResponse.json(registeredUser, { status: 200 }))
+  );
+  const user = userEvent.setup();
+  const qc = renderWithClient(<RegisterForm />);
+
+  await user.type(screen.getByLabelText(/email/i), 'new@example.com');
+  await user.type(screen.getByLabelText(/name/i), 'New User');
+  await user.type(screen.getByLabelText(/password/i), 'SecurePass1!');
+  await user.click(screen.getByRole('button', { name: /create account/i }));
+
+  await waitFor(() => expect(qc.getQueryData(AUTH_ME_QUERY_KEY)).toEqual(registeredUser));
 });
 
 test('RegisterForm shows error alert on failed registration', async () => {

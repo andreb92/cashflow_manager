@@ -61,7 +61,7 @@ export default function TransactionList({ dateMonth, billingMonth }: Props) {
           <TransactionRow
             key={tx.id}
             tx={tx}
-            method={methodMap[tx.payment_method_id]}
+            method={tx.payment_method_id ? methodMap[tx.payment_method_id] : undefined}
             category={tx.category_id ? categoryMap[tx.category_id] : undefined}
             onEdit={() => setEditTx(tx)}
             onDelete={() => setDeleteTx(tx)}

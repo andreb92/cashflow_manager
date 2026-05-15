@@ -46,6 +46,15 @@ def test_migration_head_creates_expected_schema():
             uc["name"] for uc in inspector.get_unique_constraints("payment_methods")
         }
         assert "uq_pm_user_name" in unique_constraints
+        pm_link_fks = [
+            fk for fk in inspector.get_foreign_keys("payment_methods")
+            if fk["referred_table"] == "payment_methods"
+            and fk["constrained_columns"] == ["linked_bank_id"]
+        ]
+        assert len(pm_link_fks) == 1, f"Expected 1 self-FK on linked_bank_id, got: {pm_link_fks}"
+        assert pm_link_fks[0]["options"].get("ondelete", "").upper() == "SET NULL", (
+            f"Expected SET NULL on payment_methods.linked_bank_id, got: {pm_link_fks[0]}"
+        )
 
         # forecasts — datetime columns
         forecast_cols = {c["name"]: c for c in inspector.get_columns("forecasts")}
@@ -54,9 +63,16 @@ def test_migration_head_creates_expected_schema():
 
         # transactions — category_id FK must have exactly one reference to categories with RESTRICT
         tx_cols = {c["name"] for c in inspector.get_columns("transactions")}
+        tx_cols_by_name = {c["name"]: c for c in inspector.get_columns("transactions")}
         assert "installment_total" not in tx_cols
         assert "installment_index" not in tx_cols
         tx_fks = inspector.get_foreign_keys("transactions")
+        pm_fks = [fk for fk in tx_fks if fk["referred_table"] == "payment_methods"]
+        assert len(pm_fks) == 1, f"Expected 1 FK to payment_methods, got {len(pm_fks)}: {pm_fks}"
+        assert tx_cols_by_name["payment_method_id"]["nullable"] is True
+        assert pm_fks[0]["options"].get("ondelete", "").upper() == "SET NULL", (
+            f"Expected SET NULL ondelete on transactions.payment_method_id, got: {pm_fks[0]}"
+        )
         cat_fks = [fk for fk in tx_fks if fk["referred_table"] == "categories"]
         assert len(cat_fks) == 1, f"Expected 1 FK to categories, got {len(cat_fks)}: {cat_fks}"
         assert cat_fks[0]["options"].get("ondelete", "").upper() == "RESTRICT", (

@@ -51,7 +51,8 @@ def list_transfers(
     billing_month: Optional[str] = None,
     from_account: Optional[str] = None,
     to_account: Optional[str] = None,
-    limit: Optional[int] = None, offset: int = 0,
+    limit: Optional[int] = Query(None, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -185,7 +186,15 @@ def delete_transfer(
     else:
         _promote_transfer_series_root_if_needed(db, current_user.id, t)
         to_del = [t]
-    for row in to_del:
+    delete_ids = [row.id for row in to_del]
+    if delete_ids:
+        db.query(Transfer).filter(
+            Transfer.user_id == current_user.id,
+            Transfer.parent_transfer_id.in_(delete_ids),
+        ).update({Transfer.parent_transfer_id: None}, synchronize_session=False)
+        db.flush()
+
+    for row in sorted(to_del, key=lambda item: item.id == root_id):
         db.delete(row)
     db.commit()
     return {"ok": True}

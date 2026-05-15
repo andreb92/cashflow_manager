@@ -29,7 +29,7 @@ export default function TransactionRow({ tx, method, category, onEdit, onDelete 
               → billed {tx.billing_month.slice(0, 7)}
             </span>
           )}
-          {' · '}{method?.name ?? tx.payment_method_id}
+          {' · '}{method?.name ?? tx.payment_method_id ?? 'Deleted payment method'}
           {' · '}{category ? `${category.type}/${category.sub_type}` : ''}
         </div>
       </div>

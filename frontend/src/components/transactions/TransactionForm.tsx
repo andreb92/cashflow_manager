@@ -69,13 +69,25 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
   const { register, watch, handleSubmit, formState: { errors }, setValue } = useForm<Fields>({
     defaultValues: initial
       ? {
-          ...initial,
+          date: initial.date,
+          detail: initial.detail,
           amount: String(initial.amount),
+          payment_method_id: initial.payment_method_id ?? '',
           category_id: initial.category_id ?? '',
+          transaction_direction: initial.transaction_direction,
           recurrence_months: String(initial.recurrence_months ?? ''),
           notes: initial.notes ?? '',
         }
-      : { transaction_direction: 'debit', date: format(new Date(), 'yyyy-MM-dd') },
+      : {
+          transaction_direction: 'debit',
+          date: format(new Date(), 'yyyy-MM-dd'),
+          detail: '',
+          amount: '',
+          payment_method_id: '',
+          category_id: '',
+          recurrence_months: '',
+          notes: '',
+        },
   });
 
   const { data: methods = [] } = useQuery({ queryKey: ['payment-methods', 'active'], queryFn: () => paymentMethodsApi.list() });
@@ -181,7 +193,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
   const radioInactive = 'bg-elevated text-primary border-line-strong hover:border-blue-400';
 
   return (
-    <form onSubmit={handleSubmit((d) => mutate(d))} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit((data: Fields) => mutate(data))} className="flex flex-col gap-3">
       <Input
         label="Date" type="date" required
         hint="The actual date of the transaction."

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, React.RefAttributes<HTMLSelectElement> {
   label: string;
@@ -8,7 +8,8 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, Rea
 }
 
 export function Select({ label, hint, error, id, options, required, ref, ...props }: SelectProps) {
-  const selectId = id ?? label.toLowerCase().replace(/\s+/g, '-');
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={selectId} className="text-sm font-medium text-secondary">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>

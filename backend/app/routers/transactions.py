@@ -58,8 +58,8 @@ def list_transactions(
     date_month: Optional[str] = Query(None),     # YYYY-MM — used by transactions page (filters by actual date)
     payment_method_id: Optional[str] = None,
     parent_id: Optional[str] = None,
-    limit: Optional[int] = Query(None),
-    offset: int = 0,
+    limit: Optional[int] = Query(None, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -211,7 +211,15 @@ def delete_transaction(
         _promote_transaction_series_root_if_needed(db, current_user.id, tx)
         to_delete = [tx]
 
-    for t in to_delete:
+    delete_ids = [t.id for t in to_delete]
+    if delete_ids:
+        db.query(Transaction).filter(
+            Transaction.user_id == current_user.id,
+            Transaction.parent_transaction_id.in_(delete_ids),
+        ).update({Transaction.parent_transaction_id: None}, synchronize_session=False)
+        db.flush()
+
+    for t in sorted(to_delete, key=lambda row: row.id == root_id):
         db.delete(t)
     db.commit()
     return {"ok": True}

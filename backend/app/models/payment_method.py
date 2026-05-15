@@ -18,7 +18,7 @@ class PaymentMethod(Base):
     type: Mapped[str] = mapped_column(String(50))
     is_main_bank: Mapped[bool] = mapped_column(Boolean, default=False)
     linked_bank_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("payment_methods.id"), nullable=True
+        String(36), ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True
     )
     opening_balance: Mapped[Optional[float]] = mapped_column(Numeric(12, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

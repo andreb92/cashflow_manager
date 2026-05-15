@@ -54,6 +54,7 @@ function SetupGuard() {
   });
 
   if (isLoading || (user && statusLoading)) return null;
+  if (!user) return <Navigate to="/login" replace />;
   if (user && status?.complete) return <Navigate to="/" replace />;
   return <Outlet />;
 }

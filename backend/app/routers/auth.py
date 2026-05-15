@@ -2,6 +2,7 @@ from typing import Annotated
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.user import User, gen_uuid
@@ -133,7 +134,11 @@ def register(body: RegisterRequest, response: Response, db: Session = Depends(ge
         name=body.name,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered")
     db.refresh(user)
     token = create_access_token({"sub": user.id})
     _set_auth_cookie(response, token)
@@ -273,7 +278,9 @@ async def oidc_callback(
             )
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid ID token")
-        if oidc_nonce is not None and id_token_claims.get("nonce") != oidc_nonce:
+        if oidc_nonce is None:
+            raise HTTPException(status_code=400, detail="Invalid nonce")
+        if id_token_claims.get("nonce") != oidc_nonce:
             raise HTTPException(status_code=400, detail="Invalid nonce")
 
     if userinfo_ep:

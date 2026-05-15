@@ -24,6 +24,16 @@ test('unauthenticated user is redirected to /login', async () => {
   );
 });
 
+test('unauthenticated user visiting /setup is redirected to /login', async () => {
+  server.use(
+    http.get('/api/v1/auth/me', () => HttpResponse.json(null, { status: 401 }))
+  );
+  renderApp('/setup');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
+  );
+});
+
 test('authenticated user with onboarding complete sees dashboard', async () => {
   renderApp('/');
   await waitFor(() =>

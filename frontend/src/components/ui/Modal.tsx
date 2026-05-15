@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 interface Props {
   open: boolean;
@@ -8,25 +8,77 @@ interface Props {
 }
 
 export default function Modal({ open, onClose, title, children }: Props) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.style.overflow = 'hidden';
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const focusableSelector = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+    const focusableElements = () =>
+      Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
+        .filter((el) => !el.hasAttribute('disabled'));
+
+    (focusableElements()[0] ?? dialogRef.current)?.focus();
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusable = focusableElements();
+      if (focusable.length === 0) {
+        e.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener('keydown', handler);
     return () => {
       document.body.style.overflow = '';
       document.removeEventListener('keydown', handler);
+      previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" role="dialog" aria-modal="true">
-      <div className="bg-surface rounded-t-2xl sm:rounded-xl shadow-xl p-6 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="bg-surface rounded-t-2xl sm:rounded-xl shadow-xl p-6 w-full sm:max-w-lg max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-primary">{title}</h2>
-          <button onClick={onClose} className="text-faint hover:text-secondary text-xl">×</button>
+          <h2 id={titleId} className="text-lg font-semibold text-primary">{title}</h2>
+          <button aria-label="Close modal" onClick={onClose} className="text-faint hover:text-secondary text-xl">×</button>
         </div>
         {children}
       </div>

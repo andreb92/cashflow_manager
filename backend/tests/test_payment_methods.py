@@ -55,6 +55,21 @@ def test_main_bank_history_contains_two_rows_after_switch(client):
     assert len(r.json()) == 2
 
 
+def test_set_main_bank_replaces_same_month_history_row(client):
+    _setup(client)
+    methods = client.get("/api/v1/payment-methods").json()
+    second_id = next(pm["id"] for pm in methods if pm["name"] == "SecondBank")
+    main_id = next(pm["id"] for pm in methods if pm["name"] == "MyBank")
+
+    assert client.post(f"/api/v1/payment-methods/{second_id}/set-main-bank", json={"opening_balance": 2000.0}).status_code == 200
+    assert client.post(f"/api/v1/payment-methods/{main_id}/set-main-bank", json={"opening_balance": 3000.0}).status_code == 200
+
+    history = client.get("/api/v1/payment-methods/main-bank-history").json()
+    current_month_rows = [row for row in history if row["valid_from"] != "2026-01-01"]
+    assert len(current_month_rows) == 1
+    assert current_month_rows[0]["payment_method_id"] == main_id
+
+
 def test_active_only_excludes_inactive(client):
     _setup(client)
     # Create a payment method
@@ -213,3 +228,24 @@ def test_update_payment_method_rejects_foreign_linked_bank_id(client):
     })
     r = client.put(f"/api/v1/payment-methods/{wallet_id}", json={"linked_bank_id": foreign_bank_id})
     assert r.status_code == 422
+
+
+def test_update_payment_method_rejects_non_bank_linked_bank_id(client):
+    _setup(client)
+    card_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyCard")
+    wallet_id = client.post("/api/v1/payment-methods", json={"name": "Wallet", "type": "prepaid"}).json()["id"]
+
+    r = client.put(f"/api/v1/payment-methods/{card_id}", json={"linked_bank_id": wallet_id})
+    assert r.status_code == 422
+
+
+def test_update_payment_method_can_clear_linked_bank_id(client):
+    _setup(client)
+    methods = client.get("/api/v1/payment-methods").json()
+    bank_id = next(pm["id"] for pm in methods if pm["type"] == "bank")
+    card_id = next(pm["id"] for pm in methods if pm["name"] == "MyCard")
+
+    assert client.put(f"/api/v1/payment-methods/{card_id}", json={"linked_bank_id": bank_id}).status_code == 200
+    r = client.put(f"/api/v1/payment-methods/{card_id}", json={"linked_bank_id": None})
+    assert r.status_code == 200
+    assert r.json()["linked_bank_id"] is None

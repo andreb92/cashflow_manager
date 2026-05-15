@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, React.RefAttributes<HTMLInputElement> {
   label: string;
@@ -7,7 +7,8 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, React.
 }
 
 export function Input({ label, hint, error, id, className = '', required, ref, ...props }: InputProps) {
-  const inputId = id ?? label.toLowerCase().replace(/\s+/g, '-');
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={inputId} className="text-sm font-medium text-secondary">

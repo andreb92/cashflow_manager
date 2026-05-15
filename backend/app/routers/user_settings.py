@@ -13,6 +13,17 @@ ALLOWED_SETTING_KEYS = frozenset({
     "theme",
 })
 
+ALLOWED_SETTING_PREFIXES = (
+    "opening_saving_balance_",
+    "opening_investment_balance_",
+)
+
+
+def _is_allowed_setting_key(key: str) -> bool:
+    if key in ALLOWED_SETTING_KEYS:
+        return True
+    return any(key.startswith(prefix) and key[len(prefix):].strip() for prefix in ALLOWED_SETTING_PREFIXES)
+
 
 class SettingItem(BaseModel):
     key: str
@@ -27,7 +38,7 @@ def get_settings(current_user: User = Depends(get_current_user), db: Session = D
 @router.put("")
 def update_settings(items: List[SettingItem], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     for item in items:
-        if item.key not in ALLOWED_SETTING_KEYS:
+        if not _is_allowed_setting_key(item.key):
             raise HTTPException(status_code=422, detail=f"Unknown setting key: {item.key!r}")
         row = db.query(UserSetting).filter_by(user_id=current_user.id, key=item.key).first()
         if row:
