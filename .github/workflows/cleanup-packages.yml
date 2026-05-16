@@ -2,191 +2,23 @@ name: Cleanup container images
 
 on:
   schedule:
-    - cron: '0 4 * * 0'  # Every Sunday at 04:00 UTC
+    - cron: '0 4 * * 0'
   workflow_dispatch:
+
+permissions:
+  packages: write
 
 jobs:
   cleanup-untagged:
-    name: Delete untagged GHCR images
+    name: Delete old untagged GHCR images
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      OWNER: ${{ github.repository_owner }}
-      PACKAGE: cashflow-manager
-      KEEP_UNTAGGED: "2"
-      MAX_BATCH: "100"
     steps:
-      - name: Compute untagged version IDs to delete
-        id: compute
-        run: |
-          set -euo pipefail
-
-          gh api --paginate \
-            "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
-            > versions.json
-
-          python3 - <<'PY' > to_delete.txt
-          import base64, json, os, sys, urllib.request
-
-          owner = os.environ["OWNER"]
-          pkg   = os.environ["PACKAGE"]
-          keep  = int(os.environ["KEEP_UNTAGGED"])
-          cap   = int(os.environ["MAX_BATCH"])
-          token = os.environ["GH_TOKEN"]
-          # GHCR's /v2/ endpoint expects the token base64-encoded as the Bearer
-          # value (per its OCI-style token auth). Sending the raw PAT/GITHUB_TOKEN
-          # returns 403 Forbidden even with packages:read.
-          bearer = base64.b64encode(token.encode()).decode()
-
-          with open("versions.json") as f:
-              versions = json.load(f)
-
-          def tags_of(v):
-              return v.get("metadata", {}).get("container", {}).get("tags", []) or []
-
-          tagged   = [v for v in versions if tags_of(v)]
-          untagged = [v for v in versions if not tags_of(v)]
-
-          protected = set()
-          hdr_accept = (
-              "application/vnd.oci.image.index.v1+json,"
-              "application/vnd.docker.distribution.manifest.list.v2+json,"
-              "application/vnd.oci.image.manifest.v1+json,"
-              "application/vnd.docker.distribution.manifest.v2+json"
-          )
-          fetched = 0
-          for v in tagged:
-              for tag in tags_of(v):
-                  url = f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{tag}"
-                  req = urllib.request.Request(url, headers={
-                      "Authorization": f"Bearer {bearer}",
-                      "Accept": hdr_accept,
-                  })
-                  try:
-                      with urllib.request.urlopen(req, timeout=20) as r:
-                          body = json.load(r)
-                  except Exception as e:
-                      print(f"warn: could not fetch manifest for {tag}: {e}", file=sys.stderr)
-                      continue
-                  fetched += 1
-                  for m in body.get("manifests", []):
-                      d = m.get("digest")
-                      if d:
-                          protected.add(d)
-
-          # Fail closed: if we could not resolve any tagged manifest, we have no
-          # protected-digest set and would risk cascade-deleting live children.
-          if tagged and fetched == 0:
-              print("error: could not fetch any tagged manifest; refusing to delete", file=sys.stderr)
-              sys.exit(1)
-          print(f"info: resolved children of {fetched} tagged manifest(s); "
-                f"protected digests: {len(protected)}", file=sys.stderr)
-
-          # Untagged versions whose digest is NOT referenced by any kept tag.
-          # The container version `name` is the sha256:... digest.
-          orphans = [v for v in untagged if v["name"] not in protected]
-
-          # Cascade-safety: if any orphan is itself a manifest list, GHCR will
-          # cascade-delete its children when the parent is removed. Sending both
-          # parent and child to the action causes the documented "Package not
-          # found" 404 mid-batch. Drop children whose parent is also in our list.
-          orphan_digests = {v["name"] for v in orphans}
-          cascaded_children = set()
-          for v in orphans:
-              digest = v["name"]
-              url = f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{digest}"
-              req = urllib.request.Request(url, headers={
-                  "Authorization": f"Bearer {bearer}",
-                  "Accept": hdr_accept,
-              })
-              try:
-                  with urllib.request.urlopen(req, timeout=20) as r:
-                      body = json.load(r)
-              except Exception:
-                  continue
-              for m in body.get("manifests", []):
-                  d = m.get("digest")
-                  if d and d in orphan_digests:
-                      cascaded_children.add(d)
-          if cascaded_children:
-              print(f"info: excluding {len(cascaded_children)} child digest(s) "
-                    f"that will be cascade-deleted by their parent", file=sys.stderr)
-              orphans = [v for v in orphans if v["name"] not in cascaded_children]
-
-          orphans.sort(key=lambda v: v["created_at"], reverse=True)
-          deletable = orphans[keep:][:cap]
-
-          ids = [str(v["id"]) for v in deletable]
-          print(",".join(ids))
-          PY
-
-          ids="$(tr -d '\n' < to_delete.txt)"
-          if [ -z "$ids" ]; then
-            count=0
-          else
-            count=$(awk -F',' '{print NF}' <<< "$ids")
-          fi
-          echo "Selected ${count} untagged version(s) for deletion"
-          echo "ids=${ids}" >> "$GITHUB_OUTPUT"
-
-      - name: Delete selected untagged versions
-        if: steps.compute.outputs.ids != ''
+      - name: Delete old untagged versions
         uses: actions/delete-package-versions@v5
         with:
+          owner: ${{ github.repository_owner }}
           package-name: cashflow-manager
           package-type: container
-          package-version-ids: ${{ steps.compute.outputs.ids }}
-
-  cleanup-old-sha-tags:
-    name: Delete old SHA-tagged GHCR images
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      OWNER: ${{ github.repository_owner }}
-      PACKAGE: cashflow-manager
-      KEEP_N: "10"
-      MAX_AGE_DAYS: "30"
-    steps:
-      - name: Identify and delete stale SHA-tagged versions
-        run: |
-          set -euo pipefail
-          # Pull every container version (paginated). Each item has id, created_at, metadata.container.tags.
-          gh api --paginate \
-            "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
-            > versions.json
-
-          # Filter: versions whose tags are non-empty AND every tag matches sha-*
-          # (i.e. SHA-only versions — anything also tagged "latest" or a semver is left alone).
-          # Sort by created_at desc, drop the KEEP_N newest, then drop anything younger than MAX_AGE_DAYS.
-          python3 - <<'PY' > to_delete.txt
-          import json, os, datetime as dt
-          keep_n = int(os.environ["KEEP_N"])
-          max_age = int(os.environ["MAX_AGE_DAYS"])
-          cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=max_age)
-          with open("versions.json") as f:
-              versions = json.load(f)
-          sha_only = []
-          for v in versions:
-              tags = v.get("metadata", {}).get("container", {}).get("tags", [])
-              if not tags:
-                  continue
-              if all(t.startswith("sha-") for t in tags):
-                  sha_only.append(v)
-          sha_only.sort(key=lambda v: v["created_at"], reverse=True)
-          for v in sha_only[keep_n:]:
-              created = dt.datetime.fromisoformat(v["created_at"].replace("Z", "+00:00"))
-              if created < cutoff:
-                  print(v["id"])
-          PY
-
-          count=$(wc -l < to_delete.txt | tr -d ' ')
-          echo "Will delete ${count} SHA-tagged versions"
-          while read -r vid; do
-            [ -z "$vid" ] && continue
-            echo "Deleting version ${vid}"
-            gh api -X DELETE "/users/${OWNER}/packages/container/${PACKAGE}/versions/${vid}"
-          done < to_delete.txt
+          # Multi-arch child manifests are untagged in GHCR, so keep a wide buffer.
+          min-versions-to-keep: 100
+          delete-only-untagged-versions: 'true'

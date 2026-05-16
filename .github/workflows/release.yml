@@ -20,7 +20,8 @@ jobs:
       packages: write # needed to push to GHCR
       issues: write # needed by @semantic-release/github to comment on issues
       pull-requests: write # needed by @semantic-release/github to comment on PRs
-      id-token: write # needed by docker/build-push-action@v7 for GitHub artifact attestation
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
 
     steps:
       - name: Checkout (full history for semantic-release)
@@ -40,52 +41,41 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU (multi-arch emulation)
+        if: steps.semantic.outputs.new_release_published == 'true'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
+        if: steps.semantic.outputs.new_release_published == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Login to GHCR
+        if: steps.semantic.outputs.new_release_published == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Determine image tags
-        id: tags
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          IMAGE="ghcr.io/${OWNER}/cashflow-manager"
-          SHA_TAG="${IMAGE}:sha-${{ steps.sha.outputs.short }}"
-          if [ "${{ steps.semantic.outputs.new_release_published }}" = "true" ]; then
-            VERSION="${{ steps.semantic.outputs.new_release_version }}"
-            echo "tags=${SHA_TAG},${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "tags=${SHA_TAG}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build and push image
+        if: steps.semantic.outputs.new_release_published == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          provenance: mode=max
-          sbom: true
-          tags: ${{ steps.tags.outputs.tags }}
+          provenance: false
+          sbom: false
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/cashflow-manager:${{ steps.semantic.outputs.new_release_version }}
+            ghcr.io/${{ github.repository_owner }}/cashflow-manager:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Personal cashflow manager — FastAPI backend + React frontend
             org.opencontainers.image.licenses=MIT
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cashflow-manager:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cashflow-manager:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Bump image tag in deploy/docker-compose.yml
         if: steps.semantic.outputs.new_release_published == 'true'
