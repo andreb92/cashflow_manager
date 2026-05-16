@@ -17,15 +17,18 @@ jobs:
       - name: Validate each commit message
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           git fetch origin "${BASE_REF}" --depth=200
           # Conventional Commits regex — matches the types semantic-release recognises
           # plus an optional scope, optional "!" for breaking, and a non-empty subject.
           pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
-          # Range: merge-base to HEAD covers exactly the commits this PR adds.
-          base=$(git merge-base "origin/${BASE_REF}" HEAD)
-          commits=$(git log --format='%H %s' "${base}..HEAD")
+          # Validate exactly the PR's commits — use the PR head SHA (not the synthetic
+          # refs/pull/N/merge HEAD that actions/checkout resolves by default) and skip
+          # merge commits in the range.
+          base=$(git merge-base "origin/${BASE_REF}" "${HEAD_SHA}")
+          commits=$(git log --no-merges --format='%H %s' "${base}..${HEAD_SHA}")
           failed=0
           while IFS= read -r line; do
             [ -z "$line" ] && continue

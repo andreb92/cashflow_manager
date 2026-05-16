@@ -11,13 +11,91 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      PACKAGE: cashflow-manager
+      KEEP_UNTAGGED: "2"
+      MAX_BATCH: "100"
     steps:
-      - uses: actions/delete-package-versions@v5
+      - name: Compute untagged version IDs to delete
+        id: compute
+        run: |
+          set -euo pipefail
+
+          gh api --paginate \
+            "/users/${OWNER}/packages/container/${PACKAGE}/versions" \
+            > versions.json
+
+          python3 - <<'PY' > to_delete.txt
+          import json, os, sys, urllib.request
+
+          owner = os.environ["OWNER"]
+          pkg   = os.environ["PACKAGE"]
+          keep  = int(os.environ["KEEP_UNTAGGED"])
+          cap   = int(os.environ["MAX_BATCH"])
+          token = os.environ["GH_TOKEN"]
+
+          with open("versions.json") as f:
+              versions = json.load(f)
+
+          def tags_of(v):
+              return v.get("metadata", {}).get("container", {}).get("tags", []) or []
+
+          tagged   = [v for v in versions if tags_of(v)]
+          untagged = [v for v in versions if not tags_of(v)]
+
+          protected = set()
+          hdr_accept = (
+              "application/vnd.oci.image.index.v1+json,"
+              "application/vnd.docker.distribution.manifest.list.v2+json,"
+              "application/vnd.oci.image.manifest.v1+json,"
+              "application/vnd.docker.distribution.manifest.v2+json"
+          )
+          for v in tagged:
+              for tag in tags_of(v):
+                  url = f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{tag}"
+                  req = urllib.request.Request(url, headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": hdr_accept,
+                  })
+                  try:
+                      with urllib.request.urlopen(req, timeout=20) as r:
+                          body = json.load(r)
+                  except Exception as e:
+                      print(f"warn: could not fetch manifest for {tag}: {e}", file=sys.stderr)
+                      continue
+                  for m in body.get("manifests", []):
+                      d = m.get("digest")
+                      if d:
+                          protected.add(d)
+
+          # Untagged versions whose digest is NOT referenced by any kept tag.
+          # The container version `name` is the sha256:... digest.
+          orphans = [v for v in untagged if v["name"] not in protected]
+          orphans.sort(key=lambda v: v["created_at"], reverse=True)
+          deletable = orphans[keep:][:cap]
+
+          ids = [str(v["id"]) for v in deletable]
+          print(",".join(ids))
+          PY
+
+          ids="$(tr -d '\n' < to_delete.txt)"
+          if [ -z "$ids" ]; then
+            count=0
+          else
+            count=$(awk -F',' '{print NF}' <<< "$ids")
+          fi
+          echo "Selected ${count} untagged version(s) for deletion"
+          echo "ids=${ids}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete selected untagged versions
+        if: steps.compute.outputs.ids != ''
+        uses: actions/delete-package-versions@v5
         with:
           package-name: cashflow-manager
           package-type: container
-          delete-only-untagged-versions: true
-          min-versions-to-keep: 2
+          package-version-ids: ${{ steps.compute.outputs.ids }}
 
   cleanup-old-sha-tags:
     name: Delete old SHA-tagged GHCR images
