@@ -99,17 +99,20 @@ def _accumulate_balances(
                         else:
                             balance -= float(tx.amount)
                     elif tx.transaction_direction == "credit":
-                        # Revolving/credit-card payoff recorded as "credit".
-                        # Prepaid, saving, or other PMs are not bank-funded.
+                        # Revolving/credit-card payoff recorded as "credit" → bank pays.
+                        # Debit-card refunds (credit on a debit_card) flow back to the bank.
+                        # Prepaid/cash/saving are not bank-funded.
                         tx_pm = pm_by_id.get(tx.payment_method_id)
-                        if tx_pm and tx_pm.type in NEXT_MONTH_TYPES:
-                            balance -= float(tx.amount)
+                        if tx_pm:
+                            if tx_pm.type in NEXT_MONTH_TYPES:
+                                balance -= float(tx.amount)
+                            elif tx_pm.type == "debit_card":
+                                balance += float(tx.amount)
                     elif tx.transaction_direction == "debit":
-                        # Credit card purchases shift to billing_month (next month).
-                        # Deduct them from the bank balance in that billing month so the
-                        # balance reflects the upcoming CC bill.
+                        # credit_card → purchase billed next month, drawn from bank in billing_month.
+                        # debit_card  → purchase drawn from bank in the same month.
                         tx_pm = pm_by_id.get(tx.payment_method_id)
-                        if tx_pm and tx_pm.type == "credit_card":
+                        if tx_pm and tx_pm.type in ("credit_card", "debit_card"):
                             balance -= float(tx.amount)
 
                 # Apply transfers for this billing month — prefer the stable FK id

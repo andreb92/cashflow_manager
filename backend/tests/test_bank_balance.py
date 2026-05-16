@@ -594,3 +594,74 @@ def test_compute_bank_balances_for_year_cc_debit_reduces_bank_in_billing_month(_
     assert result[1] == pytest.approx(1000.0)  # Jan unaffected
     assert result[2] == pytest.approx(800.0)   # Feb: 1000 - 200
     assert result[3] == pytest.approx(800.0)   # Mar onwards unchanged
+
+
+def test_bank_balance_debit_card_reduces_bank_balance(_standalone_db, make_user):
+    """debit_card purchases (direction='debit') must reduce main bank balance
+    in the same billing month — they are bank-funded by definition."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="debit_card_balance@test.com")
+    db = _standalone_db
+
+    bank_pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    dc_pm = PaymentMethod(user_id=user.id, name="MyDebit", type="debit_card", is_main_bank=False)
+    db.add_all([bank_pm, dc_pm])
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Personal", sub_type="Food")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=bank_pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-15", detail="Cigarettes",
+        amount=11, payment_method_id=dc_pm.id, category_id=cat.id,
+        transaction_direction="debit", billing_month="2026-01-01",
+    ))
+    db.commit()
+
+    assert compute_bank_balance(user.id, 2026, 1, db) == pytest.approx(989.0)
+
+
+def test_bank_balance_debit_card_refund_credits_bank(_standalone_db, make_user):
+    """direction='credit' on a debit_card (refund) must add back to the bank balance."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="debit_card_refund@test.com")
+    db = _standalone_db
+
+    bank_pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    dc_pm = PaymentMethod(user_id=user.id, name="MyDebit", type="debit_card", is_main_bank=False)
+    db.add_all([bank_pm, dc_pm])
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Personal", sub_type="Food")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=bank_pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-20", detail="Refund",
+        amount=25, payment_method_id=dc_pm.id, category_id=cat.id,
+        transaction_direction="credit", billing_month="2026-01-01",
+    ))
+    db.commit()
+
+    assert compute_bank_balance(user.id, 2026, 1, db) == pytest.approx(1025.0)
