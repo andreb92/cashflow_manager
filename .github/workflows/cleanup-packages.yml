@@ -28,13 +28,17 @@ jobs:
             > versions.json
 
           python3 - <<'PY' > to_delete.txt
-          import json, os, sys, urllib.request
+          import base64, json, os, sys, urllib.request
 
           owner = os.environ["OWNER"]
           pkg   = os.environ["PACKAGE"]
           keep  = int(os.environ["KEEP_UNTAGGED"])
           cap   = int(os.environ["MAX_BATCH"])
           token = os.environ["GH_TOKEN"]
+          # GHCR's /v2/ endpoint expects the token base64-encoded as the Bearer
+          # value (per its OCI-style token auth). Sending the raw PAT/GITHUB_TOKEN
+          # returns 403 Forbidden even with packages:read.
+          bearer = base64.b64encode(token.encode()).decode()
 
           with open("versions.json") as f:
               versions = json.load(f)
@@ -52,11 +56,12 @@ jobs:
               "application/vnd.oci.image.manifest.v1+json,"
               "application/vnd.docker.distribution.manifest.v2+json"
           )
+          fetched = 0
           for v in tagged:
               for tag in tags_of(v):
                   url = f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{tag}"
                   req = urllib.request.Request(url, headers={
-                      "Authorization": f"Bearer {token}",
+                      "Authorization": f"Bearer {bearer}",
                       "Accept": hdr_accept,
                   })
                   try:
@@ -65,14 +70,51 @@ jobs:
                   except Exception as e:
                       print(f"warn: could not fetch manifest for {tag}: {e}", file=sys.stderr)
                       continue
+                  fetched += 1
                   for m in body.get("manifests", []):
                       d = m.get("digest")
                       if d:
                           protected.add(d)
 
+          # Fail closed: if we could not resolve any tagged manifest, we have no
+          # protected-digest set and would risk cascade-deleting live children.
+          if tagged and fetched == 0:
+              print("error: could not fetch any tagged manifest; refusing to delete", file=sys.stderr)
+              sys.exit(1)
+          print(f"info: resolved children of {fetched} tagged manifest(s); "
+                f"protected digests: {len(protected)}", file=sys.stderr)
+
           # Untagged versions whose digest is NOT referenced by any kept tag.
           # The container version `name` is the sha256:... digest.
           orphans = [v for v in untagged if v["name"] not in protected]
+
+          # Cascade-safety: if any orphan is itself a manifest list, GHCR will
+          # cascade-delete its children when the parent is removed. Sending both
+          # parent and child to the action causes the documented "Package not
+          # found" 404 mid-batch. Drop children whose parent is also in our list.
+          orphan_digests = {v["name"] for v in orphans}
+          cascaded_children = set()
+          for v in orphans:
+              digest = v["name"]
+              url = f"https://ghcr.io/v2/{owner}/{pkg}/manifests/{digest}"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {bearer}",
+                  "Accept": hdr_accept,
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      body = json.load(r)
+              except Exception:
+                  continue
+              for m in body.get("manifests", []):
+                  d = m.get("digest")
+                  if d and d in orphan_digests:
+                      cascaded_children.add(d)
+          if cascaded_children:
+              print(f"info: excluding {len(cascaded_children)} child digest(s) "
+                    f"that will be cascade-deleted by their parent", file=sys.stderr)
+              orphans = [v for v in orphans if v["name"] not in cascaded_children]
+
           orphans.sort(key=lambda v: v["created_at"], reverse=True)
           deletable = orphans[keep:][:cap]
 
