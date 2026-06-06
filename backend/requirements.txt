@@ -9,7 +9,7 @@ python-multipart==0.0.28
 pydantic-settings==2.14.1
 cryptography==47.0.0
 python-dateutil==2.9.0.post0
-pytz==2026.1.post1
+pytz==2026.2
 
 # dev / test
 pytest==9.0.3
