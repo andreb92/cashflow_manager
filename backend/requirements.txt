@@ -6,7 +6,7 @@ PyJWT>=2.9.0
 bcrypt>=4.0.0
 httpx==0.28.1
 python-multipart==0.0.32
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 cryptography==47.0.0
 python-dateutil==2.9.0.post0
 pytz==2026.1.post1
