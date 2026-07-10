@@ -1,3 +1,10 @@
+## [1.4.12](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.11...v1.4.12) (2026-07-10)
+
+
+### Bug Fixes
+
+* code review findings ([#64](https://github.com/soulwaxx/cashflow_manager/issues/64)) ([3b7ac44](https://github.com/soulwaxx/cashflow_manager/commit/3b7ac4437046f2665331dc5497d4a54891bb7ef1))
+
 ## [1.4.5](https://github.com/soulwaxx/cashflow_manager/compare/v1.4.4...v1.4.5) (2026-04-29)
 
 
