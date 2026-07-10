@@ -164,3 +164,132 @@ def test_assets_transfer_balance_multiple_accounts(_standalone_db, make_user):
     beta = next(r for r in rows if r.asset_name == "Beta")
     assert alpha.computed_amount == 1200.0   # 1000 + 200 in
     assert beta.computed_amount == 400.0     # 500 - 100 out
+
+
+def test_transfer_carries_forward_across_years(_standalone_db, make_user):
+    """A transfer in year N must persist in N+1 and N+2 with no new transfers."""
+    from app.services.assets import compute_assets
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="carry_forward@test.com")
+    db = _standalone_db
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2025-01-01"))
+    db.add(UserSetting(user_id=user.id, key="opening_saving_balance_Nest", value="3000"))
+    db.add(Transfer(
+        user_id=user.id, date="2025-05-01", detail="deposit",
+        amount=500, from_account_type="bank", from_account_name="Main",
+        to_account_type="saving", to_account_name="Nest",
+        billing_month="2025-05-01",
+    ))
+    db.commit()
+
+    for year in (2025, 2026, 2027):
+        rows = compute_assets(user.id, year, db)
+        nest = next(r for r in rows if r.asset_name == "Nest")
+        assert nest.computed_amount == 3500.0, f"year {year}"
+
+
+def test_year_before_first_transfer_shows_opening(_standalone_db, make_user):
+    """A year before any transfer shows the plain opening balance."""
+    from app.services.assets import compute_assets
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="before_transfer@test.com")
+    db = _standalone_db
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2025-01-01"))
+    db.add(UserSetting(user_id=user.id, key="opening_saving_balance_Nest", value="3000"))
+    db.add(Transfer(
+        user_id=user.id, date="2026-05-01", detail="deposit",
+        amount=500, from_account_type="bank", from_account_name="Main",
+        to_account_type="saving", to_account_name="Nest",
+        billing_month="2026-05-01",
+    ))
+    db.commit()
+
+    rows = compute_assets(user.id, 2025, db)
+    nest = next(r for r in rows if r.asset_name == "Nest")
+    assert nest.computed_amount == 3000.0
+
+
+def test_transfers_in_two_years_accumulate(_standalone_db, make_user):
+    """Transfers made in different years accumulate into later-year balances."""
+    from app.services.assets import compute_assets
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="accumulate@test.com")
+    db = _standalone_db
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2025-01-01"))
+    db.add(UserSetting(user_id=user.id, key="opening_saving_balance_Nest", value="3000"))
+    db.add(Transfer(
+        user_id=user.id, date="2025-05-01", detail="deposit",
+        amount=500, from_account_type="bank", from_account_name="Main",
+        to_account_type="saving", to_account_name="Nest",
+        billing_month="2025-05-01",
+    ))
+    db.add(Transfer(
+        user_id=user.id, date="2026-05-01", detail="deposit",
+        amount=200, from_account_type="bank", from_account_name="Main",
+        to_account_type="saving", to_account_name="Nest",
+        billing_month="2026-05-01",
+    ))
+    db.commit()
+
+    assert next(r for r in compute_assets(user.id, 2025, db) if r.asset_name == "Nest").computed_amount == 3500.0
+    assert next(r for r in compute_assets(user.id, 2026, db) if r.asset_name == "Nest").computed_amount == 3700.0
+
+
+def test_transfer_out_carries_forward(_standalone_db, make_user):
+    """A transfer OUT in year N reduces the balance in year N+1."""
+    from app.services.assets import compute_assets
+    from app.models.user import UserSetting
+    from app.models.transfer import Transfer
+
+    user = make_user(email="transfer_out@test.com")
+    db = _standalone_db
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2025-01-01"))
+    db.add(UserSetting(user_id=user.id, key="opening_saving_balance_Nest", value="3000"))
+    db.add(Transfer(
+        user_id=user.id, date="2025-05-01", detail="withdraw",
+        amount=800, from_account_type="saving", from_account_name="Nest",
+        to_account_type="bank", to_account_name="Main",
+        billing_month="2025-05-01",
+    ))
+    db.commit()
+
+    rows = compute_assets(user.id, 2026, db)
+    nest = next(r for r in rows if r.asset_name == "Nest")
+    assert nest.computed_amount == 2200.0   # 3000 - 800 out
+
+
+def test_manual_override_does_not_leak_to_next_year(_standalone_db, make_user):
+    """A manual override for year N must not affect year N+1's computed amount."""
+    from app.services.assets import compute_assets
+    from app.models.user import UserSetting
+    from app.models.asset import Asset
+
+    user = make_user(email="override_leak@test.com")
+    db = _standalone_db
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2025-01-01"))
+    db.add(UserSetting(user_id=user.id, key="opening_saving_balance_Nest", value="3000"))
+    db.add(Asset(
+        user_id=user.id, year=2025, asset_type="saving",
+        asset_name="Nest", manual_override=9999.0,
+    ))
+    db.commit()
+
+    override_year = next(r for r in compute_assets(user.id, 2025, db) if r.asset_name == "Nest")
+    assert override_year.final_amount == 9999.0
+    assert override_year.computed_amount == 3000.0
+
+    next_year = next(r for r in compute_assets(user.id, 2026, db) if r.asset_name == "Nest")
+    assert next_year.computed_amount == 3000.0
+    assert next_year.manual_override is None
+    assert next_year.final_amount == 3000.0
