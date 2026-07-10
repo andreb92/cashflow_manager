@@ -1,10 +1,13 @@
 import bisect
 from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from app.models.payment_method import PaymentMethod, MainBankHistory
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
 from app.services.billing import NEXT_MONTH_TYPES
+
+_CENTS = Decimal("0.01")
 
 
 def _bulk_load(user_id: str, start_month_first: str, end_date: str, db: Session):
@@ -73,7 +76,9 @@ def _accumulate_balances(
     keyed by ``'YYYY-MM-01'`` month-first string to the end-of-month rolling balance.
     """
     result: dict[str, float] = {}
-    balance = 0.0
+    # Accumulate in Decimal so cent-drift never builds up across the month walk.
+    # Only the public result dict is converted back to float.
+    balance = Decimal("0")
     curr_year, curr_month = start_year, start_month
 
     while (curr_year, curr_month) <= (until_year, until_month):
@@ -86,18 +91,19 @@ def _accumulate_balances(
         if mbh:
             # On the first month for THIS main bank entry, start from its opening_balance
             if mbh.valid_from == month_first:
-                balance = float(mbh.opening_balance)
+                balance = Decimal(str(mbh.opening_balance))
 
             pm = pm_by_id.get(mbh.payment_method_id)
             if pm:
                 # Apply transactions for this billing month
                 for tx in txs_by_month.get(month_first, []):
                     if tx.payment_method_id == pm.id:
-                        # Transactions directly on the main bank PM
-                        if tx.transaction_direction == "income":
-                            balance += float(tx.amount)
+                        # Transactions directly on the main bank PM: income and
+                        # credit (e.g. a refund) add, debit subtracts.
+                        if tx.transaction_direction in ("income", "credit"):
+                            balance += Decimal(str(tx.amount))
                         else:
-                            balance -= float(tx.amount)
+                            balance -= Decimal(str(tx.amount))
                     elif tx.transaction_direction == "credit":
                         # Revolving/credit-card payoff recorded as "credit" → bank pays.
                         # Debit-card refunds (credit on a debit_card) flow back to the bank.
@@ -105,15 +111,15 @@ def _accumulate_balances(
                         tx_pm = pm_by_id.get(tx.payment_method_id)
                         if tx_pm:
                             if tx_pm.type in NEXT_MONTH_TYPES:
-                                balance -= float(tx.amount)
+                                balance -= Decimal(str(tx.amount))
                             elif tx_pm.type == "debit_card":
-                                balance += float(tx.amount)
+                                balance += Decimal(str(tx.amount))
                     elif tx.transaction_direction == "debit":
                         # credit_card → purchase billed next month, drawn from bank in billing_month.
                         # debit_card  → purchase drawn from bank in the same month.
                         tx_pm = pm_by_id.get(tx.payment_method_id)
                         if tx_pm and tx_pm.type in ("credit_card", "debit_card"):
-                            balance -= float(tx.amount)
+                            balance -= Decimal(str(tx.amount))
 
                 # Apply transfers for this billing month — prefer the stable FK id
                 # when available, fall back to name matching for legacy rows that
@@ -136,11 +142,11 @@ def _accumulate_balances(
                         )
                     )
                     if from_match:
-                        balance -= float(t.amount)
+                        balance -= Decimal(str(t.amount))
                     elif to_match:
-                        balance += float(t.amount)
+                        balance += Decimal(str(t.amount))
 
-        result[month_first] = balance
+        result[month_first] = float(balance.quantize(_CENTS, rounding=ROUND_HALF_UP))
         curr_year, curr_month = _advance_month(curr_year, curr_month)
 
     return result
