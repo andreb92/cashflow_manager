@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -67,4 +68,40 @@ test('SalaryPage shows salary breakdown when period selected', async () => {
   await waitFor(() => screen.getByText('2026-01-01'));
   // Breakdown should show INPS
   expect(await screen.findByText(/inps/i)).toBeInTheDocument();
+});
+
+test('SalaryPage edit form does not send manual_net_override, preserving a stored override', async () => {
+  const user = userEvent.setup();
+  let requestBody: unknown;
+
+  server.use(
+    http.get('/api/v1/salary', () =>
+      HttpResponse.json([{
+        id: 'sc1', user_id: 'u1', valid_from: '2026-01-01', ral: 4000,
+        employer_contrib_rate: 0.04, voluntary_contrib_rate: 0, regional_tax_rate: 0.0173,
+        municipal_tax_rate: 0.001, meal_vouchers_annual: 0, welfare_annual: 0,
+        salary_months: 12, manual_net_override: 2750, computed_net_monthly: 2600,
+      }])
+    ),
+    http.put('/api/v1/salary/sc1', async ({ request }) => {
+      requestBody = await request.json();
+      return HttpResponse.json({
+        id: 'sc1', user_id: 'u1', valid_from: '2026-01-01', ral: 4200,
+        employer_contrib_rate: 0.04, voluntary_contrib_rate: 0, regional_tax_rate: 0.0173,
+        municipal_tax_rate: 0.001, meal_vouchers_annual: 0, welfare_annual: 0,
+        salary_months: 12, manual_net_override: 2750, computed_net_monthly: 2600,
+      });
+    })
+  );
+
+  render(<SalaryPage />, { wrapper });
+  await waitFor(() => expect(screen.getByText(/manual override/i)).toBeInTheDocument());
+
+  await user.click(screen.getByRole('button', { name: /edit/i }));
+  await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+  await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+  await waitFor(() => expect(requestBody).toBeTruthy());
+  expect(requestBody).not.toHaveProperty('manual_net_override');
 });
