@@ -5,6 +5,7 @@ import { categoriesApi } from '../../api/categories';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
+import { Badge } from '../../components/ui/Badge';
 import type { Category } from '../../types/api';
 
 interface AddFields { type: string; sub_type: string; }
@@ -17,7 +18,7 @@ export default function CategoriesSettings() {
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['categories', 'all'],
-    queryFn: () => categoriesApi.list(true),
+    queryFn: () => categoriesApi.list(false),
   });
 
   const { register: registerAdd, handleSubmit: handleAdd, reset: resetAdd } = useForm<AddFields>();
@@ -26,7 +27,6 @@ export default function CategoriesSettings() {
   const { mutate: create, isPending: creating } = useMutation({
     mutationFn: (d: AddFields) => categoriesApi.create(d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
       qc.invalidateQueries({ queryKey: ['categories'] });
       setAddOpen(false);
       resetAdd();
@@ -36,7 +36,6 @@ export default function CategoriesSettings() {
   const { mutate: update, isPending: updating } = useMutation({
     mutationFn: (d: EditFields) => categoriesApi.update(editCat!.id, d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
       qc.invalidateQueries({ queryKey: ['categories'] });
       setEditCat(null);
     },
@@ -45,7 +44,13 @@ export default function CategoriesSettings() {
   const { mutate: deactivate } = useMutation({
     mutationFn: (id: string) => categoriesApi.update(id, { is_active: false }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['categories', 'all'] });
+      qc.invalidateQueries({ queryKey: ['categories'] });
+    },
+  });
+
+  const { mutate: reactivate } = useMutation({
+    mutationFn: (id: string) => categoriesApi.update(id, { is_active: true }),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['categories'] });
     },
   });
@@ -64,10 +69,15 @@ export default function CategoriesSettings() {
               <span>{c.type}</span>
               <span className="text-faint">/</span>
               <span>{c.sub_type}</span>
+              {!c.is_active && <Badge color="gray">Inactive</Badge>}
             </div>
             <div className="flex gap-2">
               <Button variant="ghost" className="text-xs" onClick={() => { setEditCat(c); resetEdit({ type: c.type, sub_type: c.sub_type }); }}>Rename</Button>
-              <Button variant="ghost" className="text-xs text-red-500" onClick={() => deactivate(c.id)}>Deactivate</Button>
+              {c.is_active ? (
+                <Button variant="ghost" className="text-xs text-red-500" onClick={() => deactivate(c.id)}>Deactivate</Button>
+              ) : (
+                <Button variant="ghost" className="text-xs" onClick={() => reactivate(c.id)}>Reactivate</Button>
+              )}
             </div>
           </li>
         ))}

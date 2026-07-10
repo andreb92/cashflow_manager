@@ -29,7 +29,7 @@ export default function TransactionList({ dateMonth, billingMonth }: Props) {
         : transactionsApi.list({ date_month: dateMonth }),
   });
   const { data: methods = [] } = useQuery({ queryKey: ['payment-methods', 'all'], queryFn: () => paymentMethodsApi.list(false) });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list(false) });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories', 'all'], queryFn: () => categoriesApi.list(false) });
 
   const methodMap = Object.fromEntries(methods.map((m) => [m.id, m]));
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
