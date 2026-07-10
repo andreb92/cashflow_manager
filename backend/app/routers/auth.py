@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
@@ -270,7 +271,8 @@ async def oidc_callback(
     id_token_claims = None
     if id_token:
         try:
-            id_token_claims = _oidc.verify_id_token(
+            id_token_claims = await asyncio.to_thread(
+                _oidc.verify_id_token,
                 id_token,
                 endpoints["jwks_uri"],
                 settings.oidc_client_id,
