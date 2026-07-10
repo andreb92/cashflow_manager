@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { transfersApi } from '../../api/transfers';
+import { fmt } from '../../utils/format';
 import TransferForm from './TransferForm';
 import CascadeDeleteModal from './CascadeDeleteModal';
 import Modal from '../ui/Modal';
@@ -8,7 +9,6 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import type { Transfer } from '../../types/api';
 
-const fmt = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 2 });
 const PAGE_SIZE = 100;
 
 export default function TransferList() {
@@ -41,6 +41,7 @@ export default function TransferList() {
       qc.invalidateQueries({ queryKey: ['transfers'] });
       qc.invalidateQueries({ queryKey: ['summary'] });
       qc.invalidateQueries({ queryKey: ['assets'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
       setDeleteTr(null);
     },
     onError: (err: unknown) => {

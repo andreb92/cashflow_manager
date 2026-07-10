@@ -99,6 +99,7 @@ export default function TransferForm({ onSuccess, initial }: Props) {
       qc.invalidateQueries({ queryKey: ['transfers'] });
       qc.invalidateQueries({ queryKey: ['summary'] });
       qc.invalidateQueries({ queryKey: ['assets'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
       onSuccess();
     },
     onError: (err: unknown) => {

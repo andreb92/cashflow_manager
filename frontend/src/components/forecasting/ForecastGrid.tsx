@@ -1,7 +1,6 @@
 import type { ForecastProjection } from '../../types/api';
+import { fmt } from '../../utils/format';
 import { Button } from '../ui/Button';
-
-const fmt = (n: number) => n.toLocaleString('it-IT', { minimumFractionDigits: 2 });
 
 interface Props {
   projection: ForecastProjection;

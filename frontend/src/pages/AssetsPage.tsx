@@ -57,6 +57,7 @@ function AssetRow({ asset, year }: { asset: Asset; year: number }) {
 
 export default function AssetsPage() {
   const [year, setYear] = useState(() => new Date().getFullYear());
+  const [inputYear, setInputYear] = useState(() => String(new Date().getFullYear()));
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<'saving' | 'investment'>('saving');
@@ -87,8 +88,20 @@ export default function AssetsPage() {
     <div className="max-w-4xl space-y-4">
       <div className="flex items-center gap-4">
         <h1 className="text-xl font-bold text-primary">Assets</h1>
-        <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value))}
-          className="border border-line-strong rounded px-2 py-1 w-24 text-sm bg-elevated text-primary" min="2000" max="2100" />
+        <input
+          type="number"
+          value={inputYear}
+          onChange={(e) => {
+            setInputYear(e.target.value);
+            const parsed = parseInt(e.target.value, 10);
+            if (!isNaN(parsed) && parsed >= 2000 && parsed <= 2100) {
+              setYear(parsed);
+            }
+          }}
+          className="border border-line-strong rounded px-2 py-1 w-24 text-sm bg-elevated text-primary"
+          min="2000"
+          max="2100"
+        />
         <Button variant="secondary" onClick={() => setAddOpen(true)}>+ Add account</Button>
       </div>
       {isLoading ? (
