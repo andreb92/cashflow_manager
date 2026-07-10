@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: ['categories', 'all'],
     queryFn: () => categoriesApi.list(false),
   });
   const { data: paymentMethods = [] } = useQuery({

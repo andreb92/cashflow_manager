@@ -10,22 +10,21 @@ import type { SalaryConfig } from '../types/api';
 import { fmt } from '../utils/format';
 
 function BreakdownPanel({ config }: { config: SalaryConfig }) {
+  const calculateParams = {
+    as_of: config.valid_from,
+    ral: config.ral,
+    employer_contrib_rate: config.employer_contrib_rate,
+    voluntary_contrib_rate: config.voluntary_contrib_rate,
+    regional_tax_rate: config.regional_tax_rate,
+    municipal_tax_rate: config.municipal_tax_rate,
+    meal_vouchers_annual: config.meal_vouchers_annual,
+    welfare_annual: config.welfare_annual,
+    salary_months: config.salary_months,
+  };
+
   const { data: breakdown } = useQuery({
-    queryKey: [
-      'salary', 'calculate', config.id,
-      config.ral, config.employer_contrib_rate, config.voluntary_contrib_rate,
-      config.regional_tax_rate, config.municipal_tax_rate, config.salary_months,
-    ],
-    queryFn: () =>
-      salaryApi.calculate({
-        as_of: config.valid_from,
-        ral: config.ral,
-        employer_contrib_rate: config.employer_contrib_rate,
-        voluntary_contrib_rate: config.voluntary_contrib_rate,
-        regional_tax_rate: config.regional_tax_rate,
-        municipal_tax_rate: config.municipal_tax_rate,
-        salary_months: config.salary_months,
-      }),
+    queryKey: ['salary', 'calculate', calculateParams],
+    queryFn: () => salaryApi.calculate(calculateParams),
   });
 
   const { data: taxConfigs = [] } = useQuery({
@@ -136,7 +135,6 @@ function fieldsToBody(d: PeriodFields) {
     meal_vouchers_annual: parseFloat(d.meal_vouchers_annual) || 0,
     welfare_annual: parseFloat(d.welfare_annual) || 0,
     salary_months: parseInt(d.salary_months) || 12,
-    manual_net_override: null as null,
   };
 }
 
@@ -166,7 +164,7 @@ export default function SalaryPage() {
   const { register: regEdit, handleSubmit: handleEditSubmit, reset: resetEdit } = useForm<PeriodFields>();
 
   const { mutate: addPeriod, isPending: adding } = useMutation({
-    mutationFn: (d: PeriodFields) => salaryApi.create(fieldsToBody(d)),
+    mutationFn: (d: PeriodFields) => salaryApi.create({ ...fieldsToBody(d), manual_net_override: null }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['salary'] });
       setAddOpen(false);

@@ -448,6 +448,107 @@ def test_cascade_all_update_does_not_change_sibling_dates(client):
     assert len(dates) == 3, f"Cascade update collapsed dates: {dates}"
 
 
+def test_create_credit_on_bank_pm_returns_422(client):
+    """A 'credit' direction on a bank PM is nonsense (only income/debit allowed) — reject it."""
+    pm_id, cat_id = _setup(client)
+    r = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Bad credit on bank", "amount": 50,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "credit",
+    })
+    assert r.status_code == 422
+
+
+def test_create_credit_on_cash_pm_returns_422(client):
+    """A 'credit' direction on a cash PM must be rejected server-side."""
+    pm_id, cat_id = _setup(client)
+    cash = client.post("/api/v1/payment-methods", json={"name": "Wallet", "type": "cash"}).json()
+    r = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Bad credit on cash", "amount": 20,
+        "payment_method_id": cash["id"], "category_id": cat_id,
+        "transaction_direction": "credit",
+    })
+    assert r.status_code == 422
+
+
+def test_create_income_on_credit_card_returns_422(client):
+    """A credit_card PM only accepts 'debit' — income must be rejected."""
+    pm_id, cat_id = _setup(client)
+    amex_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyCard")
+    r = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Bad income on CC", "amount": 50,
+        "payment_method_id": amex_id, "category_id": cat_id,
+        "transaction_direction": "income",
+    })
+    assert r.status_code == 422
+
+
+def test_create_valid_direction_combinations_succeed(client):
+    """Valid (pm type, direction) combinations still create transactions."""
+    pm_id, cat_id = _setup(client)
+    amex_id = next(pm["id"] for pm in client.get("/api/v1/payment-methods").json() if pm["name"] == "MyCard")
+    # income on bank
+    assert client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Salary", "amount": 2500,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "income",
+    }).status_code == 200
+    # debit on bank
+    assert client.post("/api/v1/transactions", json={
+        "date": "2026-03-11", "detail": "Rent", "amount": 900,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    }).status_code == 200
+    # debit on credit_card
+    assert client.post("/api/v1/transactions", json={
+        "date": "2026-03-12", "detail": "Dinner", "amount": 80,
+        "payment_method_id": amex_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    }).status_code == 200
+
+
+def test_create_credit_on_revolving_pm_succeeds(client):
+    """revolving PMs accept both debit and credit."""
+    pm_id, cat_id = _setup(client)
+    rev = client.post("/api/v1/payment-methods", json={"name": "Revolving", "type": "revolving"}).json()
+    assert client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Payoff", "amount": 100,
+        "payment_method_id": rev["id"], "category_id": cat_id,
+        "transaction_direction": "credit",
+    }).status_code == 200
+
+
+def test_create_credit_on_credit_card_succeeds(client):
+    """credit_card PMs accept credit (payoff/refund) — bank_balance gives it defined semantics."""
+    pm_id, cat_id = _setup(client)
+    cc = client.post("/api/v1/payment-methods", json={"name": "CreditCC", "type": "credit_card"}).json()
+    assert client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "CC payoff", "amount": 100,
+        "payment_method_id": cc["id"], "category_id": cat_id,
+        "transaction_direction": "credit",
+    }).status_code == 200
+
+
+def test_update_to_invalid_direction_row_returns_422(client, db):
+    """Editing a transaction whose stored (pm type, direction) is invalid must be rejected."""
+    from app.models.transaction import Transaction
+
+    pm_id, cat_id = _setup(client)
+    tx_id = client.post("/api/v1/transactions", json={
+        "date": "2026-03-10", "detail": "Legit", "amount": 50,
+        "payment_method_id": pm_id, "category_id": cat_id,
+        "transaction_direction": "debit",
+    }).json()["id"]
+
+    # Simulate a legacy/corrupt row: credit directly on a bank PM.
+    tx = db.get(Transaction, tx_id)
+    tx.transaction_direction = "credit"
+    db.commit()
+
+    r = client.put(f"/api/v1/transactions/{tx_id}", json={"detail": "Edited"})
+    assert r.status_code == 422
+
+
 def test_create_transaction_rejects_zero_amount(client):
     pm_id, cat_id = _setup(client)
     resp = client.post("/api/v1/transactions", json={

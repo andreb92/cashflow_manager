@@ -6,8 +6,8 @@ import { Button } from '../ui/Button';
 interface Account { name: string; opening_balance: number; }
 
 export default function StepInvestmentAccounts() {
-  const { updateData, setStep } = useOnboarding();
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { updateData, setStep, data } = useOnboarding();
+  const [accounts, setAccounts] = useState<Account[]>(data.investment_accounts ?? []);
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
 

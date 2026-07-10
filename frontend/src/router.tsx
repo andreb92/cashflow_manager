@@ -29,7 +29,7 @@ function lazyElement(node: ReactElement) {
 
 function AuthGuard() {
   const { data: user, isLoading } = useCurrentUser();
-  const { data: status, isLoading: statusLoading } = useQuery({
+  const { data: status, isLoading: statusLoading, isError, refetch } = useQuery({
     queryKey: ['onboarding', 'status'],
     queryFn: onboardingApi.status,
     enabled: !!user,
@@ -39,6 +39,22 @@ function AuthGuard() {
 
   if (isLoading || (user && statusLoading)) return null;
   if (!user) return <Navigate to="/login" replace />;
+  if (isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-canvas">
+        <div className="bg-surface rounded-lg shadow-sm border border-line p-8 w-full max-w-sm text-center">
+          <h1 className="text-2xl font-bold mb-4 text-primary">Error loading setup status</h1>
+          <p className="text-sm text-muted mb-6">Please try again.</p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (status && !status.complete) return <Navigate to="/setup" replace />;
   return <Outlet />;
 }

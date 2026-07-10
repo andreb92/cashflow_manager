@@ -11,7 +11,7 @@ interface PM { name: string; type: PMType; linked_bank_name?: string; }
 
 export default function StepPaymentMethods() {
   const { updateData, setStep, data } = useOnboarding();
-  const [methods, setMethods] = useState<PM[]>([]);
+  const [methods, setMethods] = useState<PM[]>(data.payment_methods ?? []);
   const [name, setName] = useState('');
   const [type, setType] = useState<PMType>('debit_card');
   const [linked, setLinked] = useState('');

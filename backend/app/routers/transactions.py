@@ -13,11 +13,33 @@ from dateutil.parser import parse as parse_date
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
+# Directions each payment-method type accepts. Card types allow "credit"
+# because bank_balance gives it defined semantics (CC/revolving payoff,
+# debit-card refund), even though the frontend form hides it for some types.
+# Types not listed here (bank, cash, prepaid) fall back to income/expense
+# only — "credit" there has no meaning and corrupts the rolling balance.
+ALLOWED_DIRECTIONS_BY_PM_TYPE: dict[str, set[str]] = {
+    "credit_card": {"debit", "credit"},
+    "revolving": {"debit", "credit"},
+    "debit_card": {"debit", "credit"},
+}
+_DEFAULT_ALLOWED_DIRECTIONS = {"income", "debit"}
+
+
 def _get_pm(db, pm_id, user_id):
     pm = db.query(PaymentMethod).filter_by(id=pm_id, user_id=user_id).first()
     if not pm:
         raise HTTPException(422, "payment_method_id not found")
     return pm
+
+
+def _validate_direction(pm_type: str, direction: str) -> None:
+    allowed = ALLOWED_DIRECTIONS_BY_PM_TYPE.get(pm_type, _DEFAULT_ALLOWED_DIRECTIONS)
+    if direction not in allowed:
+        raise HTTPException(
+            422,
+            f"transaction_direction {direction!r} is not allowed for payment method type {pm_type!r}",
+        )
 
 
 def _ensure_category_owned_by_user(db, category_id, user_id):
@@ -88,6 +110,7 @@ def create_transaction(
 ):
     pm = _get_pm(db, req.payment_method_id, current_user.id)
     _ensure_category_owned_by_user(db, req.category_id, current_user.id)
+    _validate_direction(pm.type, req.transaction_direction)
 
     if req.recurrence_months:
         tx_date = parse_date(req.date).date()
@@ -181,6 +204,7 @@ def update_transaction(
         pm = pms_map.get(t.payment_method_id)
         if not pm:
             raise HTTPException(422, f"Payment method {t.payment_method_id!r} no longer exists")
+        _validate_direction(pm.type, t.transaction_direction)
         t.billing_month = str(billing_month(pm.type, parse_date(t.date).date()))
     db.commit()
     db.refresh(tx)

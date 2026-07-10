@@ -91,7 +91,7 @@ export default function TransactionForm({ onSuccess, initial }: Props) {
   });
 
   const { data: methods = [] } = useQuery({ queryKey: ['payment-methods', 'active'], queryFn: () => paymentMethodsApi.list() });
-  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => categoriesApi.list() });
+  const { data: categories = [] } = useQuery({ queryKey: ['categories', 'active'], queryFn: () => categoriesApi.list() });
 
   const selectedMethodId = watch('payment_method_id');
   const selectedMethod = methods.find((m) => m.id === selectedMethodId);

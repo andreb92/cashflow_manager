@@ -39,13 +39,13 @@ def compute_assets(user_id: str, year: int, db: Session) -> List[AssetRow]:
             final_amount=override if override is not None else computed,
         )
 
-    # Bulk-load all transfers for this year once
-    year_start = f"{year:04d}-01-01"
+    # Bulk-load all transfers up to the end of this year once (cumulative
+    # balance: transfers from earlier years must carry forward)
     year_end = f"{year:04d}-12-31"
     year_transfers = (
         db.query(Transfer)
         .filter_by(user_id=user_id)
-        .filter(Transfer.billing_month >= year_start, Transfer.billing_month <= year_end)
+        .filter(Transfer.billing_month <= year_end)
         .all()
     )
     from collections import defaultdict

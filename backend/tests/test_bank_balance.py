@@ -207,8 +207,12 @@ def test_credit_on_credit_card_reduces_bank_balance(client, db):
 
     CC transactions bill the *next* month (see billing.py NEXT_MONTH_TYPES), so a
     transaction dated 2026-01-15 has billing_month 2026-02-01 and appears in February.
+
+    The row is inserted directly at the DB layer to prove bank_balance handles
+    such rows regardless of how they were created.
     """
     from app.services.bank_balance import compute_bank_balance
+    from app.models.transaction import Transaction
     client.post("/api/v1/auth/register", json={"email": "v@x.com", "password": "Password1!", "name": "V"})
     client.post("/api/v1/auth/login", json={"email": "v@x.com", "password": "Password1!"})
     client.post("/api/v1/onboarding", json={
@@ -216,15 +220,14 @@ def test_credit_on_credit_card_reduces_bank_balance(client, db):
         "main_bank": {"name": "MainBank", "opening_balance": 1000.0},
     })
     cc = client.post("/api/v1/payment-methods", json={"name": "MyCreditCard", "type": "credit_card"}).json()
-    client.post("/api/v1/transactions", json={
-        "date": "2026-01-15",
-        "detail": "CC payoff",
-        "amount": 300,
-        "payment_method_id": cc["id"],
-        "transaction_direction": "credit",
-    })
     from app.models.user import User
     user = db.query(User).filter_by(email="v@x.com").first()
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-15", detail="CC payoff",
+        amount=300, payment_method_id=cc["id"], category_id=None,
+        transaction_direction="credit", billing_month="2026-02-01",
+    ))
+    db.commit()
     # CC billing_month is next month (Feb 2026), so check February balance
     balance = compute_bank_balance(user.id, 2026, 2, db)
     assert balance == pytest.approx(700.0), f"CC credit should reduce bank balance, got {balance}"
@@ -630,6 +633,41 @@ def test_bank_balance_debit_card_reduces_bank_balance(_standalone_db, make_user)
     db.commit()
 
     assert compute_bank_balance(user.id, 2026, 1, db) == pytest.approx(989.0)
+
+
+def test_bank_balance_credit_on_main_bank_increases_balance(_standalone_db, make_user):
+    """direction='credit' recorded directly on the main bank PM (e.g. a refund)
+    must ADD to the balance, not subtract. Legacy rows may carry this combination."""
+    from app.services.bank_balance import compute_bank_balance
+    from app.models.payment_method import PaymentMethod, MainBankHistory
+    from app.models.user import UserSetting
+    from app.models.transaction import Transaction
+    from app.models.category import Category
+
+    user = make_user(email="credit_on_bank@test.com")
+    db = _standalone_db
+
+    bank_pm = PaymentMethod(user_id=user.id, name="MyBank", type="bank", is_main_bank=True)
+    db.add(bank_pm)
+    db.flush()
+
+    cat = Category(user_id=user.id, type="Personal", sub_type="Food")
+    db.add(cat)
+    db.flush()
+
+    db.add(UserSetting(user_id=user.id, key="tracking_start_date", value="2026-01-01"))
+    db.add(MainBankHistory(
+        user_id=user.id, payment_method_id=bank_pm.id,
+        valid_from="2026-01-01", opening_balance=1000,
+    ))
+    db.add(Transaction(
+        user_id=user.id, date="2026-01-20", detail="Refund",
+        amount=150, payment_method_id=bank_pm.id, category_id=cat.id,
+        transaction_direction="credit", billing_month="2026-01-01",
+    ))
+    db.commit()
+
+    assert compute_bank_balance(user.id, 2026, 1, db) == pytest.approx(1150.0)
 
 
 def test_bank_balance_debit_card_refund_credits_bank(_standalone_db, make_user):

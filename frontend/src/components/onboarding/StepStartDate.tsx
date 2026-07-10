@@ -4,8 +4,10 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 
 export default function StepStartDate() {
-  const { updateData, setStep } = useOnboarding();
-  const { register, handleSubmit } = useForm<{ tracking_start_date: string }>();
+  const { updateData, setStep, data } = useOnboarding();
+  const { register, handleSubmit } = useForm<{ tracking_start_date: string }>({
+    defaultValues: { tracking_start_date: data.tracking_start_date ?? '' },
+  });
 
   const onSubmit = (d: { tracking_start_date: string }) => {
     updateData({ tracking_start_date: d.tracking_start_date });
