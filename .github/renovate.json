@@ -12,9 +12,9 @@
   "semanticCommitType": "chore",
   "timezone": "Europe/Rome",
   "labels": ["dependencies"],
-  "prConcurrentLimit": 6,
-  "prHourlyLimit": 2,
-  "dependencyDashboard": true,
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "dependencyDashboard": false,
   "vulnerabilityAlerts": {
     "enabled": true,
     "labels": ["security"]
@@ -27,24 +27,17 @@
   },
   "packageRules": [
     {
-      "matchManagers": ["pip_requirements"],
-      "matchUpdateTypes": ["patch"],
-      "groupName": "backend patch dependencies",
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
-    },
-    {
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["patch"],
-      "groupName": "frontend/e2e patch dependencies",
+      "matchManagers": ["pip_requirements", "npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-non-major",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
       "matchManagers": ["pip_requirements", "npm"],
-      "matchUpdateTypes": ["major", "minor"],
+      "matchUpdateTypes": ["major"],
       "automerge": false
     },
     {
