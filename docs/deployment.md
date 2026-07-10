@@ -119,11 +119,13 @@ docker compose up -d
 
 The entire application state lives in one file:
 
+The database runs in SQLite's default rollback-journal mode, not WAL, so a plain `cp` while the app is running can capture a torn, inconsistent snapshot. Use `sqlite3`'s `.backup` command instead: it takes a transactionally consistent copy without stopping the stack.
+
 ```bash
-# Backup
-cp deploy/data/cashflow.db deploy/data/cashflow.db.bak
+# Backup (online, consistent)
+sqlite3 deploy/data/cashflow.db ".backup deploy/data/cashflow.db.bak"
 # or with timestamp:
-cp deploy/data/cashflow.db "deploy/data/cashflow-$(date +%Y%m%d).db"
+sqlite3 deploy/data/cashflow.db ".backup deploy/data/cashflow-$(date +%Y%m%d).db"
 
 # Restore
 docker compose down
