@@ -58,6 +58,59 @@ test('SetupPage advances to step 2 after filling start date and clicking Next', 
   expect(screen.getByText('Step 2 of 8')).toBeInTheDocument();
 });
 
+test('Back navigation preserves entries added on a list step (payment methods)', async () => {
+  const user = userEvent.setup();
+  render(<SetupPage />, { wrapper });
+
+  // Step 1: start date
+  await user.type(screen.getByLabelText(/tracking start date/i), '2026-01-01');
+  await user.click(screen.getByRole('button', { name: /next/i }));
+
+  // Step 2: main bank
+  await waitFor(() => expect(screen.getByText('Main bank account')).toBeInTheDocument());
+  await user.type(screen.getByLabelText(/account name/i), 'Main Bank');
+  await user.type(screen.getByLabelText(/current balance/i), '1000');
+  await user.click(screen.getByRole('button', { name: /next/i }));
+
+  // Step 3: additional banks (optional, skip straight through)
+  await waitFor(() =>
+    expect(screen.getByText('Additional bank accounts (optional)')).toBeInTheDocument()
+  );
+  await user.click(screen.getByRole('button', { name: /next/i }));
+
+  // Step 4: payment methods — add one entry
+  await waitFor(() => expect(screen.getByText('Payment methods (optional)')).toBeInTheDocument());
+  await user.type(screen.getByLabelText(/^name$/i), 'My Card');
+  await user.click(screen.getByRole('button', { name: /^add$/i }));
+  expect(screen.getByText('My Card')).toBeInTheDocument();
+
+  // Advance to step 5, then go Back to step 4
+  await user.click(screen.getByRole('button', { name: /next/i }));
+  await waitFor(() => expect(screen.getByText('Saving accounts (optional)')).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: /back/i }));
+
+  // The step remounts — entry must still be rendered (rehydrated from context)
+  await waitFor(() => expect(screen.getByText('Payment methods (optional)')).toBeInTheDocument());
+  expect(screen.getByText('My Card')).toBeInTheDocument();
+
+  // Continue forward through the rest of the wizard to the review screen
+  await user.click(screen.getByRole('button', { name: /next/i }));
+  await waitFor(() => expect(screen.getByText('Saving accounts (optional)')).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: /next/i }));
+  await waitFor(() =>
+    expect(screen.getByText('Investment accounts (optional)')).toBeInTheDocument()
+  );
+  await user.click(screen.getByRole('button', { name: /next/i }));
+  await waitFor(() =>
+    expect(screen.getByText('Salary configuration (optional)')).toBeInTheDocument()
+  );
+  await user.click(screen.getByRole('button', { name: /skip/i }));
+
+  // Review screen must count the payment method that survived the Back/Next round trip
+  await waitFor(() => expect(screen.getByText('Review & confirm')).toBeInTheDocument());
+  expect(screen.getByText(/Payment methods:/).parentElement).toHaveTextContent('Payment methods: 1');
+});
+
 // ---------------------------------------------------------------------------
 // Tests: SetupGuard redirect for already-onboarded users
 // ---------------------------------------------------------------------------

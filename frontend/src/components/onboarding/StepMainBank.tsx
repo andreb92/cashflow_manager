@@ -6,8 +6,14 @@ import { Button } from '../ui/Button';
 interface Fields { name: string; opening_balance: string; }
 
 export default function StepMainBank() {
-  const { updateData, setStep } = useOnboarding();
-  const { register, handleSubmit } = useForm<Fields>();
+  const { updateData, setStep, data } = useOnboarding();
+  const { register, handleSubmit } = useForm<Fields>({
+    defaultValues: {
+      name: data.main_bank?.name ?? '',
+      opening_balance:
+        data.main_bank?.opening_balance != null ? String(data.main_bank.opening_balance) : '',
+    },
+  });
 
   const onSubmit = (d: Fields) => {
     updateData({ main_bank: { name: d.name, opening_balance: parseFloat(d.opening_balance) } });
