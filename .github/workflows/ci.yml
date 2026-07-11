@@ -26,7 +26,7 @@ jobs:
     env:
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -37,7 +37,7 @@ jobs:
         run: echo "dir=$(python -m pip cache dir)" >> "$GITHUB_OUTPUT"
 
       - name: Pip cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ steps.pip-cache-dir.outputs.dir }}
           key: pip-${{ runner.os }}-${{ hashFiles('backend/requirements.txt') }}
@@ -68,7 +68,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -80,7 +80,7 @@ jobs:
         working-directory: frontend
 
       - name: Npm cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
@@ -115,10 +115,10 @@ jobs:
     env:
       DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up QEMU (multi-arch emulation)
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
         with:
           platforms: arm64
 
